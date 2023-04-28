@@ -1,0 +1,4 @@
+#To run my testcase please run regress.sh
+It will run all testcases
+
+./regress.sh
