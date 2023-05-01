@@ -1,3 +1,17 @@
+// *****************************************************************************
+// File: i2c_if.sv
+// Description: This file contains the i2c_if interface, which is a Bus
+// Functional Model (BFM) for the I2C communication protocol. The interface
+// implements the I2C protocol, handling low-level details such as clock cycle
+// by clock cycle bit transfers, start and stop conditions, and sending and
+// receiving ACK/NACK signals. The BFM provides tasks for common operations,
+// such as waiting for a start condition, providing read data, and monitoring
+// the I2C bus. The i2c_if interface can be used in a larger verification
+// environment to model and verify the behavior of I2C devices, by abstracting
+// the low-level details and providing a high-level API for interacting with
+// the I2C bus.
+// *****************************************************************************
+
 `include "i2c_typedefs.svh"
 `timescale 1ns / 10ps
 interface i2c_if #(
@@ -15,7 +29,12 @@ interface i2c_if #(
 	logic output_enable = 1'b0;
 	assign sda = output_enable ? data_in : 1'bz;
 
-	//task wait_for_i2c_transfer ( output i2c_op_t op, output bit [I2C_DATA_WIDTH-1:0] write_data []);
+	// ----------------------------------------------------------------------------
+	// Task: wait_for_i2c_transfer
+	// Description: Waits for an I2C transfer (either read or write operation) to
+	// complete. Captures the address, operation type, and data, then processes
+	// the operation accordingly.
+	// ----------------------------------------------------------------------------
 	task wait_for_i2c_transfer ( output bit op, output bit [I2C_DATA_WIDTH-1:0] write_data []);
 	
 		automatic bit stop_write;
@@ -81,7 +100,12 @@ interface i2c_if #(
 	endtask
 	
 	
-	//task provide_read_data ( input bit [I2C_DATA_WIDTH-1:0] read_data [], output bit transfer_complete);
+	// ----------------------------------------------------------------------------
+	// Task: provide_read_data
+	// Description: Sends the provided read_data to the I2C bus, following the
+	// I2C protocol. It breaks if a NACK is received, assuming the transfer is
+	// complete.
+	// ----------------------------------------------------------------------------
 	task provide_read_data ( input bit [I2C_DATA_WIDTH-1:0] read_data []);
 		automatic int size_of_read_data;
 		automatic bit ack_m;
@@ -107,10 +131,12 @@ interface i2c_if #(
 	endtask
 	
 	
-	
-	
+	// ----------------------------------------------------------------------------
+	// Task: monitor
+	// Description: Monitors the I2C bus and captures the address, operation type,
+	// and the received data in an array.
+	// ----------------------------------------------------------------------------
 	task monitor ( output bit [I2C_ADDR_WIDTH-1:0] addr, output bit op, output bit [I2C_DATA_WIDTH-1:0] data []);
-	//task monitor ( output bit [I2C_ADDR_WIDTH-1:0] addr, output i2c_op_t op, output bit [I2C_DATA_WIDTH-1:0] data []);
 		automatic bit stop_write;
 		automatic bit repeat_read_address;
 		automatic bit [I2C_ADDR_WIDTH-1:0] capture_address;
@@ -166,7 +192,13 @@ interface i2c_if #(
 		end
 
 	endtask
-	
+
+
+	// ----------------------------------------------------------------------------
+	// Task: wait4ack
+	// Description: Waits for an ACK (acknowledge) or NACK (not acknowledge)
+	// signal from the I2C bus.
+	// ----------------------------------------------------------------------------
 	task automatic wait4ack (output bit ack_m);
 		@(negedge scl) output_enable = 1'b0;
 		@(posedge scl) if(sda == 0) begin
@@ -174,6 +206,12 @@ interface i2c_if #(
 		end
 	endtask
 
+
+	// ----------------------------------------------------------------------------
+	// Task: parallel2serial
+	// Description: Converts parallel data to serial data to be sent over the
+	// I2C bus.
+	// ----------------------------------------------------------------------------
 	task automatic parallel2serial (input bit [I2C_DATA_WIDTH-1:0] read_data);
 		//$display("parallel2serial read_data =%0b \n",read_data);
 			for(int i = I2C_DATA_WIDTH -1; i >= 0 ; i--) begin
@@ -187,7 +225,11 @@ interface i2c_if #(
 	endtask
 	
 	 
-	//task automatic read_address (output bit [I2C_ADDR_WIDTH-1:0] capture_address, output i2c_op_t op);
+	// ----------------------------------------------------------------------------
+	// Task: read_address
+	// Description: Reads the address and operation type (read/write) from the
+	// I2C bus.
+	// ----------------------------------------------------------------------------
 	task automatic read_address (output bit [I2C_ADDR_WIDTH-1:0] capture_address, output bit op);
 		automatic bit capture_address_queue[$];
 		
@@ -204,7 +246,13 @@ interface i2c_if #(
 		//@(posedge scl) op = i2c_op_t'(sda);
 		@(posedge scl) op = sda;
 	endtask
-	
+
+
+	// ----------------------------------------------------------------------------
+	// Task: read_data
+	// Description: Reads data from the I2C bus and stores it in the
+	// capture_data output variable.
+	// ----------------------------------------------------------------------------
 	task automatic read_data (output bit [I2C_DATA_WIDTH-1:0] capture_data);
 		automatic bit capture_data_queue [$];
 		
@@ -217,7 +265,11 @@ interface i2c_if #(
 		capture_data = { >> {capture_data_queue}};
 	endtask
 	
-	
+
+	// ----------------------------------------------------------------------------
+	// Task: start
+	// Description: Waits for a start condition on the I2C bus.
+	// ----------------------------------------------------------------------------
 	task automatic start ();
 		automatic bit start_flag = 1'b1;
 		do begin
@@ -228,7 +280,12 @@ interface i2c_if #(
 		while (start_flag);
 		start_flag = 1'b1;
 	endtask
-	
+
+
+	// ----------------------------------------------------------------------------
+	// Task: stop_
+	// Description: Waits for a stop condition on the I2C bus.
+	// ----------------------------------------------------------------------------
 	task automatic stop_ ();
 		automatic bit stop_flag = 1'b1;
 		do begin
@@ -239,7 +296,11 @@ interface i2c_if #(
 		while (stop_flag);
 		stop_flag = 1'b1;
 	endtask
-	
+
+	// ----------------------------------------------------------------------------
+	// Task: ack
+	// Description: Sends an ACK (acknowledge) signal on the I2C bus.
+	// ----------------------------------------------------------------------------
 	task automatic ack ();
 		@(negedge scl) begin
 		       	data_in <= 1'b0; 

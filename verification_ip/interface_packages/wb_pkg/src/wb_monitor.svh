@@ -1,3 +1,13 @@
+// *****************************************************************************
+// File: wb_monitor.sv
+// Description: This file contains the wb_monitor class, which is a component
+// that monitors the Wishbone bus using the wb_if interface. The monitor is
+// responsible for detecting and capturing transactions on the bus, and
+// forwarding them to a specified agent for further processing. The wb_monitor
+// can be used in a larger verification environment to observe and collect
+// transaction data for analysis or checking purposes.
+// *****************************************************************************
+
 class wb_monitor extends ncsu_component#(.T(ncsu_transaction));
 
   virtual wb_if wb_intf_h;
@@ -10,14 +20,26 @@ class wb_monitor extends ncsu_component#(.T(ncsu_transaction));
     super.new(name,parent);
   endfunction
 
+  // ****************************************************************************
+  // Function: set_configuration
+  // Description: Sets the configuration for the Wishbone monitor
+  // ****************************************************************************
   function void set_configuration(wb_configuration cfg);
     cfg_h = cfg;
   endfunction
 
+  // ****************************************************************************
+  // Function: set_agent
+  // Description: Sets the agent for the Wishbone monitor to forward transactions to
+  // ****************************************************************************
   function void set_agent(ncsu_component#(T) agent);
     this.agent = agent;
   endfunction
   
+  // ****************************************************************************
+  // Task: run
+  // Description: Monitors the Wishbone bus for transactions and forwards them to the agent
+  // ****************************************************************************
   virtual task run ();
 
       bit [WB_BYTE_SIZE-1:0] temp;
