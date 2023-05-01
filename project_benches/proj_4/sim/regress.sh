@@ -1,6 +1,8 @@
 rm -rf *ucdb
 make clean
 make compile
+chmod -R 777 work
+make compile
 make optimize
 
 make run_cli GEN_TEST_TYPE=consecutive_read_test TEST_SEED=random

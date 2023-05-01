@@ -1,0 +1,4 @@
+[general]
+include_paths = [
+    "${workspaceRoot}/verification_ip/interface_packages/wb_pkg/src",
+]
