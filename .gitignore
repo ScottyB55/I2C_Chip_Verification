@@ -1,1 +1,24 @@
 /.DS_Store
+
+# Ignore build artifacts
+*.ucdb
+*.qdb
+*.qpg
+*.qtl
+
+# Ignore ModelSim simulation artifacts
+transcript
+*.wlf
+*.do
+work/
+worklib/
+
+# Ignore editor/IDE-specific files
+.vscode/
+*.code-workspace
+
+# Ignore other common temporary or generated files
+*.bak
+*.tmp
+*.swp
+*.o
