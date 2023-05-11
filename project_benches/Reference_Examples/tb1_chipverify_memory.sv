@@ -5,6 +5,8 @@
 // in a single clock along with the address while read
 // data is received on the next clock, and no transactions
 // can be started during that time indicated by "ready" signal.
+// I assume that a write cannot start while the previous one is reading,
+// and this is why we don't need the threading and semaphore for a pipeline!
 
 // This is what we are trying to verify. We don't need to understand how it is implemented.
 // We only need to understand what it is supposed to do in terms of specifications.
