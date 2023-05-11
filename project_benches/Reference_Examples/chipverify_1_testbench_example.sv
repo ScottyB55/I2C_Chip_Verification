@@ -177,21 +177,25 @@ class scoreboard;
             end
 
             else begin // Handle Reads
+                // Check if it's a first time read before any writes to that address
                 if (refq[item.addr] == null) begin
+                    // If the read data isn't the default expectation, flag an error
                     if (item.rdata != 'h1234)
                         $display ("T=%0t [Scoreboard] ERROR! First time read, addr=0x%0h exp=1234 act=0x%0h",
                                 $time, item.addr, item.rdata);
-
                     else
                         $display ("T=%0t [Scoreboard] PASS! First time read, addr=0x%0h exp=1234 act=0x%0h",
                                 $time, item.addr, item.rdata);
                 end
+                // If there is already a reg_item stored at this address (not read before first write)
                 else begin
+                    // If the item read data from the design or testbench doesn't match what we think it should be
+                    // flag an error
                     if (item.rdata != refq[item.addr].wdata)
-                        $display ("T=%0t [Scoreboard] ERROR! addr=0x%0h exp=1234 act=0x%0h",
+                        $display ("T=%0t [Scoreboard] ERROR! addr=0x%0h exp=0x%0h act=0x%0h",
                                     $time, item.addr, refq[item.addr].wdata, item.rdata);
                     else
-                        $display ("T=%0t [Scoreboard] PASS! addr=0x%0h exp=1234 act=0x%0h",
+                        $display ("T=%0t [Scoreboard] PASS! addr=0x%0h exp=0x%0h act=0x%0h",
                                     $time, item.addr, refq[item.addr].wdata, item.rdata
                 end
             end  
