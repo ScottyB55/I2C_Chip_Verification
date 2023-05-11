@@ -186,16 +186,15 @@ class scoreboard;
                         $display ("T=%0t [Scoreboard] PASS! First time read, addr=0x%0h exp=1234 act=0x%0h",
                                 $time, item.addr, item.rdata);
                 end
-            end
-
-            else begin
-                if (item.rdata != refq[item.addr].wdata)
-                    $display ("T=%0t [Scoreboard] ERROR! addr=0x%0h exp=1234 act=0x%0h",
-                                $time, item.addr, refq[item.addr].wdata, item.rdata);
-                else
-                    $display ("T=%0t [Scoreboard] PASS! addr=0x%0h exp=1234 act=0x%0h",
-                                $time, item.addr, refq[item.addr].wdata, item.rdata
-            end
+                else begin
+                    if (item.rdata != refq[item.addr].wdata)
+                        $display ("T=%0t [Scoreboard] ERROR! addr=0x%0h exp=1234 act=0x%0h",
+                                    $time, item.addr, refq[item.addr].wdata, item.rdata);
+                    else
+                        $display ("T=%0t [Scoreboard] PASS! addr=0x%0h exp=1234 act=0x%0h",
+                                    $time, item.addr, refq[item.addr].wdata, item.rdata
+                end
+            end  
         end
     endtask
 endclass
