@@ -1,10 +1,10 @@
 // https://www.chipverify.com/systemverilog/systemverilog-testbench-example-1
 
 // Design
-// Note that in this protocol, write data is prov
-// in a single clock along with the address while
-// data is received on the next clock, and no tra
-// can be started during that time indicated by "
+// Note that in this protocol, write data is provided
+// in a single clock along with the address while read
+// data is received on the next clock, and no transactions
+// can be started during that time indicated by "ready"
 // signal.
 module reg_ctrl
     # (
@@ -25,7 +25,7 @@ module reg_ctrl
     reg [DATA_WIDTH-1:0] ctrl [DEPTH];
     reg ready_dly;
     wire ready_pe;
-    // If reset is asserted, clear the memory eleme
+    // If reset is asserted, clear the memory element
     // Else store data to addr for valid writes
     // For reads, provide read data back
     always @ (posedge clk) begin
@@ -71,14 +71,14 @@ endmodule
 
 // Transaction Object
 class reg_item;
-    // This is the base transaction object that wil
-    // in the environment to initiate new transacti
+    // This is the base transaction object that will be used
+    // in the environment to initiate new transactions and
     // capture transactions at DUT interface
     rand bit [7:0] addr;
     rand bit [15:0] wdata;
     bit [15:0] rdata;
     rand bit wr;
-    // This function allows us to print contents of
+    // This function allows us to print contents of the data packet
     // so that it is easier to track in a logfile
     function void print(string tag="");
         $display ("T=%0t [%s] addr=0x%0h wr=%0d",
@@ -87,9 +87,9 @@ class reg_item;
 endclass
 
 
-// The driver is responsible for driving transact
-// All it does is to get a transaction from the m
-// available and drive it out into the DUT interf
+// The driver is responsible for driving transactions to the DUT
+// All it does is to get a transaction from the mailbox if it is
+// available and drive it out into the DUT interface.
 class driver;
     virtual reg_if vif;
     event drv_done;
@@ -98,8 +98,8 @@ class driver;
         $display ("T=%0t [Driver] starting ...", $time);
         @ (posedge vif.clk);
 
-        // Try to get a new transaction every time an
-        // packet contents to the interface. But do t
+        // Try to get a new transaction every time and then assign
+        // packet contents to the interface. But do this only if the
         // design is ready to accept new transactions
         forever begin
             reg_item item;
@@ -123,18 +123,18 @@ class driver;
 endclass
 
 // Monitor
-// The monitor has a virtual interface handle wit
-// the events happening on the interface. It sees
-// captures information into a packet and sends i
+// The monitor has a virtual interface handle with which it can monitor
+// the events happening on the interface. It sees new transactions and then
+// captures information into a packet and sends it to the scoreboard
 // using another mailbox.
 class monitor;
     virtual reg_if vif;
-    mailbox scb_mbx; // Mailbox connected to s
+    mailbox scb_mbx; // Mailbox connected to scoreboard
     task run();
         $display ("T=%0t [Monitor] starting ...", $time);
-        // Check forever at every clock edge to see i
-        // valid transaction and if yes, capture info
-        // object and send it to the scoreboard when
+        // Check forever at every clock edge to see if there is a
+        // valid transaction and if yes, capture info into a class
+        // object and send it to the scoreboard when the transaction
         // is over.
         forever begin
             @ (posedge vif.clk);
@@ -155,10 +155,10 @@ class monitor;
 endclass
 
 // Scoreboard
-// The scoreboard is responsible to check data in
-// stores data it receives for each address, scor
-// same data is received when the same address is
-// in time. So the scoreboard has a "memory" elem
+// The scoreboard is responsible to check data integrity. Since the design
+// stores data it receives for each address, scoreboard helps to check if the 
+// same data is received when the same address is read at any later point
+// in time. So the scoreboard has a "memory" element which updates it
 // internally for every write operation.
 class scoreboard;
     mailbox scb_mbx;
@@ -168,15 +168,15 @@ class scoreboard;
             reg_item item;
             scb_mbx.get(item);
             item.print("Scoreboard");
-            if (item.wr) begin
-                if (refq[item.addr] == null) begin
+            
+            if (item.wr) begin // Handle Writes
+                if (refq[item.addr] == null)
                     refq[item.addr] = new;
-                    refq[item.addr] = item;
-                    $display ("T=%0t [Scoreboard] Store addr=0x%0h wr=0x%0h data=0x%0h", $time, item.addr, item.wr, item.wda);
-                end
+                refq[item.addr] = item;
+                $display ("T=%0t [Scoreboard] Store addr=0x%0h wr=0x%0h data=0x%0h", $time, item.addr, item.wr, item.wda);
             end
 
-            if (!item.wr) begin
+            else begin // Handle Reads
                 if (refq[item.addr] == null) begin
                     if (item.rdata != 'h1234)
                         $display ("T=%0t [Scoreboard] ERROR! First time read, addr=0x%0h exp=1234 act=0x%0h",
@@ -200,9 +200,9 @@ class scoreboard;
 endclass
 
 // Environment
-// The environment is a container object simply t
-// components together. This environment can then
-// components in it would be automatically connec
+// The environment is a container object simply to hold all verification
+// components together. This environment can then be reused later and all
+// components in it would be automatically connected and available for use
 // This is an environment without a generator.
 class env;
     driver d0; // Driver to desi
@@ -217,8 +217,8 @@ class env;
         s0 = new;
         scb_mbx = new();
     endfunction
-    // Assign handles and start all components so t
-    // they all become active and wait for transact
+    // Assign handles and start all components so that
+    // they all become active and wait for transactions to be
     // available
     virtual task run();
         d0.vif = vif;
@@ -234,7 +234,7 @@ class env;
 endclass
 
 // Test Interface
-// an environment without the generator and hence
+// an environment without the generator and hence the stimulus should be
 // written in the test.
 class test;
     env e0;
@@ -262,7 +262,7 @@ class test;
     endtask
 endclass
 
-// The interface allows verification components t
+// The interface allows verification components to access DUT signals
 // using a virtual interface handle
 interface reg_if (input bit clk);
     logic rstn;
@@ -275,9 +275,9 @@ interface reg_if (input bit clk);
 endinterface
 
 // Testbench Top
-// Top level testbench contains the interface, DU
-// can be used to start test components once the
-// the reset can also be a part of the test class
+// Top level testbench contains the interface, DUT and test handles which
+// can be used to start test components once the DUT comes out of reset. Or
+// the reset can also be a part of the test class in which case all you need
 // to do is start the test's run method.
 module tb;
     reg clk;
@@ -303,15 +303,15 @@ module tb;
         t0 = new;
         t0.e0.vif = _if;
         t0.run();
-        // Once the main stimulus is over, wait for s
-        // until all transactions are finished and th
-        // simulation. Note that $finish is required
-        // there are components that are running fore
-        // the background like clk, monitor, driver,
+        // Once the main stimulus is over, wait for some time
+        // until all transactions are finished and then end
+        // simulation. Note that $finish is required because
+        // there are components that are running forever in
+        // the background like clk, monitor, driver, etc
         #200 $finish;
     end
 
-    // Simulator dependent system tasks that can be
+    // Simulator dependent system tasks that can be used to
     // dump simulation waves.
     initial begin
         $dumpvars;
