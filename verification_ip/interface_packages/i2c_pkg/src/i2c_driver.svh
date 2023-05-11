@@ -1,20 +1,20 @@
 class i2c_driver extends ncsu_component#(.T(ncsu_transaction));
-/*
-A class used to represent an I2C Driver.
+    /*
+    A class used to represent an I2C Driver.
 
-This class is responsible for managing I2C transactions in hardware.
-It handles operations such as setting configurations and providing read data to the 
-I2C interface.
+    This class is responsible for managing I2C transactions in hardware.
+    It handles operations such as setting configurations and providing read data to the 
+    I2C interface.
 
-Attributes
-----------
-i2c_intf_h : virtual i2c_if
-    The interface handler for the I2C bus
-i2c_trans_h : i2c_transaction
-    The I2C transaction handler
-configuration : i2c_configuration
-    The configuration settings for the I2C driver
-*/
+    Attributes
+    ----------
+    i2c_intf_h : virtual i2c_if
+        The interface handler for the I2C bus
+    i2c_trans_h : i2c_transaction
+        The I2C transaction handler
+    configuration : i2c_configuration
+        The configuration settings for the I2C driver
+    */
 
     virtual i2c_if i2c_intf_h;
     i2c_transaction i2c_trans_h;

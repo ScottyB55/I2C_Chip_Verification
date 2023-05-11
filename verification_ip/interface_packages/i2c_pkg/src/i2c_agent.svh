@@ -1,27 +1,27 @@
 class i2c_agent extends ncsu_component#(.T(ncsu_transaction));
-/*
-A class used to represent an I2C Agent.
+    /*
+    A class used to represent an I2C Agent.
 
-This class is responsible for managing I2C communication in hardware.
-It handles operations such as setting configurations, building I2C components,
-connecting subscribers, running the monitor and sending transactions to 
-subscribers and the driver.
+    This class is responsible for managing I2C communication in hardware.
+    It handles operations such as setting configurations, building I2C components,
+    connecting subscribers, running the monitor and sending transactions to 
+    subscribers and the driver.
 
-Attributes
-----------
-configuration : i2c_configuration
-	The configuration settings for the I2C components
-i2c_cov_h : i2c_coverage
-	The I2C coverage handler
-drv_h : i2c_driver
-	The I2C driver handler
-mon_h : i2c_monitor
-	The I2C monitor handler
-subscribers : ncsu_component #(T) []
-	The subscribers of the I2C agent
-bus : virtual i2c_if
-	The interface for the I2C bus
-*/
+    Attributes
+    ----------
+    configuration : i2c_configuration
+        The configuration settings for the I2C components
+    i2c_cov_h : i2c_coverage
+        The I2C coverage handler
+    drv_h : i2c_driver
+        The I2C driver handler
+    mon_h : i2c_monitor
+        The I2C monitor handler
+    subscribers : ncsu_component #(T) []
+        The subscribers of the I2C agent
+    bus : virtual i2c_if
+        The interface for the I2C bus
+    */
   
 	i2c_configuration configuration;
 	i2c_coverage i2c_cov_h;
