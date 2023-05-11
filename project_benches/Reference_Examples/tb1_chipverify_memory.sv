@@ -73,6 +73,7 @@ module reg_ctrl
     assign ready_pe = ~ready & ready_dly;
 endmodule
 
+
 // Transaction Object
 // What we put in the mailbox between the driver & test/generator as well as the monitor & scoreboard
 class reg_item;
@@ -135,6 +136,7 @@ class driver;
     endtask
 endclass
 
+
 // Monitor
 // Captures live transactions / events on the interface bus, and converts
 // them into a reg_item object (packet), and sends to the scoreboard
@@ -169,6 +171,7 @@ class monitor;
         end
     endtask
 endclass
+
 
 // Scoreboard and Predictor
 // The scoreboard is responsible to check data integrity. Since the design
@@ -219,6 +222,7 @@ class scoreboard;
     endtask
 endclass
 
+                                  
 // Environment
 // The environment is a container object simply to hold and connect all verification
 // components together. This environment can then be reused later and all
@@ -258,6 +262,7 @@ class env;
     endtask
 endclass
 
+                                  
 // Test Interface and Generator
 // The environment does not include the generator, so the stimulus is 
 // written in here in the test.
@@ -297,6 +302,7 @@ class test;
     endtask
 endclass
 
+                                  
 // The interface allows verification components to access DUT signals
 // using a virtual interface handle
 interface reg_if (input bit clk);
@@ -310,6 +316,7 @@ interface reg_if (input bit clk);
     logic ready;
 endinterface
 
+                                  
 // Testbench Top
 // Top level testbench contains the interface, DUT and test handles which
 // can be used to start test components once the DUT comes out of reset. Or
