@@ -192,7 +192,7 @@ class scoreboard;
                 if (refq[item.addr] == null)
                     refq[item.addr] = new;
                 refq[item.addr] = item;
-                $display ("T=%0t [Scoreboard] Store addr=0x%0h wr=0x%0h data=0x%0h", $time, item.addr, item.wr, item.wda);
+                $display ("T=%0t [Scoreboard] Store addr=0x%0h wr=0x%0h data=0x%0h", $time, item.addr, item.wr, item.wdata);
             end
 
             else begin // Handle Reads
@@ -215,7 +215,7 @@ class scoreboard;
                                     $time, item.addr, refq[item.addr].wdata, item.rdata);
                     else
                         $display ("T=%0t [Scoreboard] PASS! addr=0x%0h exp=0x%0h act=0x%0h",
-                                    $time, item.addr, refq[item.addr].wdata, item.rdata
+                                    $time, item.addr, refq[item.addr].wdata, item.rdata);
                 end
             end  
         end
@@ -294,10 +294,12 @@ class test;
         $display ("T=%0t [Test] Starting stimulus ...", $time);
         item = new;
         // Randomize all the rand and randc types with the constraints!
-        item.randomize() with { addr == 8'haa; wr == 1; };
+        if (!item.randomize() with { addr == 8'haa; wr == 1; })
+            $fatal("Randomization failed");
         drv_mbx.put(item); // takes up some time and the scoreboard will do its thing in parallel
         item = new;
-        item.randomize() with { addr == 8'haa; wr == 0; };
+        if (!item.randomize() with { addr == 8'haa; wr == 0; })
+            $fatal("Randomization failed");
         drv_mbx.put(item);
     endtask
 endclass
@@ -341,18 +343,17 @@ module tb;
                 .rdata (_if.rdata),
                 .ready (_if.ready));
 
+    test t0 = new();  // Create the new instance at the same time you declare the handle
+
     initial begin
-        new_test t0;
-        
         // Apply reset at time = 0
         clk <= 0;
         _if.rstn <= 0;
         _if.sel <= 0;
-        
+
         // At time = 20, release reset, create the new test object,
         // connect its environment to the interface, and run the test
         #20 _if.rstn <= 1;
-        t0 = new;
         t0.e0.vif = _if;
         t0.run();
         // Once the main stimulus is over, wait for some time
@@ -368,13 +369,14 @@ module tb;
     initial begin
         // Runs concurrently with other initial blocks
         
+        // specifies the name of the output file where the dumped waveforms will be stored
+        // **dumpfile should always be called before dumpvars!**
+        $dumpfile("dump.vcd");
+
         // dumpvars is a system task that tells the simulator to record the changes in all the variables
         // and nets in your design. The waveform can be viewed using a waveform viewer, 
         // like ModelSim or GTKWave, which helps in debugging the code
         $dumpvars;
-        
-        // specifies the name of the output file where the dumped waveforms will be stored
-        $dumpfile("dump.vcd");
         
         // When the previous initial block runs the $finish command, we terminate the simulation
         // And $dumpvars and $dumpfile also finish

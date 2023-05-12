@@ -1,0 +1,22 @@
+$date
+	Thu May 11 21:50:53 2023
+$end
+$version
+	QuestaSim Version 2022.2_1
+$end
+$timescale
+	1ns
+$end
+
+$scope module tb $end
+$upscope $end
+
+$scope begin tb1_chipverify_memory_sv_unit $end
+$upscope $end
+
+$scope begin std $end
+$upscope $end
+$enddefinitions $end
+#0
+$dumpvars
+$end
