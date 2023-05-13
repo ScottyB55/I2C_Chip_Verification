@@ -50,19 +50,19 @@ endmodule
 // in the environment to initiate new transactions and
 // capture transactions at DUT interface
 class switch_item;
-  rand bit [7:0]  	addr;
-  rand bit [15:0] 	data;
-  bit [7:0] 		addr_a;
-  bit [15:0] 		data_a;
-  bit [7:0] 		addr_b;
-  bit [15:0] 		data_b;
+    rand bit [7:0]  	addr;
+    rand bit [15:0] 	data;
+    bit [7:0] 		addr_a;
+    bit [15:0] 		data_a;
+    bit [7:0] 		addr_b;
+    bit [15:0] 		data_b;
 
-  // This function allows us to print contents of the data
-  // packet so that it is easier to track in a logfile
-  function void print (string tag="");
-    $display ("T=%0t %s addr=0x%0h data=0x%0h addr_a=0x%0h data_a=0x%0h addr_b=0x%0h data_b=0x%0h",
-              	$time, tag, addr, data, addr_a, data_a, addr_b, data_b);
-  endfunction
+    // This function allows us to print contents of the data
+    // packet so that it is easier to track in a logfile
+    function void print (string tag="");
+        $display ("T=%0t %s addr=0x%0h data=0x%0h addr_a=0x%0h data_a=0x%0h addr_b=0x%0h data_b=0x%0h",
+                    $time, tag, addr, data, addr_a, data_a, addr_b, data_b);
+    endfunction
 endclass
 
 
@@ -70,20 +70,21 @@ endclass
 // number of transactions with random addresses and data
 // that can be driven to the design
 class generator;
-  mailbox drv_mbx;
-  event drv_done;
-  int num = 20;
+    mailbox drv_mbx;
+    event drv_done;
+    int num = 20;
 
-  task run();
+    task run();
     for (int i = 0; i < num; i++) begin
-      switch_item item = new;
-      item.randomize();
-      $display ("T=%0t [Generator] Loop:%0d/%0d create next item", $time, i+1, num);
-      drv_mbx.put(item);
-      @(drv_done);
+        switch_item item = new;
+        if (!item.randomize())
+            $fatal("Randomization failed");
+        $display ("T=%0t [Generator] Loop:%0d/%0d create next item", $time, i+1, num);
+        drv_mbx.put(item);
+        @(drv_done);
     end
     $display ("T=%0t [Generator] Done generation of %0d items", $time, num);
-  endtask
+    endtask
 endclass
 
 
@@ -91,32 +92,32 @@ endclass
 // All it does is to get a transaction from the mailbox if it is
 // available and drive it out into the DUT interface.
 class driver;
-  virtual switch_if vif;
-  event drv_done;
-  mailbox drv_mbx;
+    virtual switch_if vif;
+    event drv_done;
+    mailbox drv_mbx;
 
-  task run();
-    $display ("T=%0t [Driver] starting ...", $time);
-    @ (posedge vif.clk);
+    task run();
+        $display ("T=%0t [Driver] starting ...", $time);
+        @ (posedge vif.clk);
 
-    // Try to get a new transaction every time and then assign
-    // packet contents to the interface. But do this only if the
-    // design is ready to accept new transactions
-    forever begin
-      switch_item item;
+        // Try to get a new transaction every time and then assign
+        // packet contents to the interface. But do this only if the
+        // design is ready to accept new transactions
+        forever begin
+            switch_item item;
 
-      $display ("T=%0t [Driver] waiting for item ...", $time);
-      drv_mbx.get(item);
-      item.print("Driver");
-      vif.vld 	<= 1;
-      vif.addr 	<= item.addr;
-      vif.data <= item.data;
+            $display ("T=%0t [Driver] waiting for item ...", $time);
+            drv_mbx.get(item);
+            item.print("Driver");
+            vif.vld 	<= 1;
+            vif.addr 	<= item.addr;
+            vif.data <= item.data;
 
-      // When transfer is over, raise the done event
-      @ (posedge vif.clk);
-      vif.vld 	<= 0; ->drv_done;
-    end
-  endtask
+            // When transfer is over, raise the done event
+            @ (posedge vif.clk);
+            vif.vld 	<= 0; ->drv_done;
+        end
+    endtask
 endclass
 
 
@@ -259,17 +260,17 @@ endclass
 
 // Test class instantiates the environment and starts it.
 class test;
-  env e0;
+    env e0;
 
-  // Creates a new instance of the environment
-  function new();
-    e0 = new;
-  endfunction
+    // Creates a new instance of the environment
+    function new();
+        e0 = new;
+    endfunction
 
-  // Runs the tasks from the environment
-  task run();
-    e0.run();
-  endtask
+    // Runs the tasks from the environment
+    task run();
+        e0.run();
+    endtask
 endclass
 
 
@@ -278,16 +279,16 @@ endclass
 // But we can effectively have predictors cover all 3 of these sides
 // This happens in our scoreboard & predictor class
 interface switch_if (input bit clk);
-  logic 		rstn;
-  logic 		vld;
-  logic [7:0] 	addr;
-  logic [15:0]	data;
+    logic 		    rstn;
+    logic 		    vld;
+    logic [7:0] 	addr;
+    logic [15:0]	data;
 
-  logic [7:0] 	addr_a;
-  logic [15:0]	data_a;
+    logic [7:0] 	addr_a;
+    logic [15:0]	data_a;
 
-  logic [7:0] 	addr_b;
-  logic [15:0]	data_b;
+    logic [7:0] 	addr_b;
+    logic [15:0]	data_b;
 endinterface
 
 
@@ -330,7 +331,7 @@ module tb;
 
   // System tasks to dump VCD waveform file
   initial begin
-    $dumpvars;
     $dumpfile("dump.vcd");
+    $dumpvars;
   end
 endmodule
