@@ -1,22 +1,28 @@
 `timescale 1ns / 10ps
 
 module top();
+/*
+Top level module to instantiate an I2C multiple bus controller, 
+drive some basic signals to configure it, and monitor it.
+*/
 
-parameter int WB_ADDR_WIDTH = 2;
-parameter int WB_DATA_WIDTH = 8;
-parameter int NUM_I2C_BUSSES = 1;
+parameter int WB_ADDR_WIDTH = 2;    // Width of the Wishbone address bus
+parameter int WB_DATA_WIDTH = 8;    // Width of the Wishbone data bus
+parameter int NUM_I2C_BUSSES = 1;   // Number of I2C buses
 parameter int I2C_ADDR_WIDTH = 7;
 parameter int I2C_DATA_WIDTH = 8;
 parameter int I2C_SLAVE_ADDRESS = 7'h22;
 
+// Defining the enumeration for register offsets
+// See the I2C Multiple Bus Controller IP Core Specification PDF
 typedef enum logic  [1:0] {
-    CSR = 2'd0,
-    DPR = 2'd1,
-    CMDR = 2'd2,
-    FSMR = 2'd3
+    CSR = 2'd0, // Control/Status Register, Pg 18
+    DPR = 2'd1, // Data/Parameter Register, Pg 19
+    CMDR = 2'd2,// Command Register, Pg 19
+    FSMR = 2'd3 // FSM States Register, Pg 20
 } reg_offset;
 
-
+/* Declare the inputs, outputs, and internal signals required for the I2C bus controller */
 bit  clk;
 bit  rst = 1'b1;
 wire cyc;
@@ -38,7 +44,6 @@ bit [WB_DATA_WIDTH-1:0] wb_data;
 
 // ****************************************************************************
 // Clock generator
-
 always begin : clk_gen
      #5;
      clk = 0;
@@ -55,89 +60,128 @@ end
 // ****************************************************************************
 // Monitor Wishbone bus and display transfers in the transcript
 initial begin : wb_monitoring
-    wb_bus.master_monitor(read_address_wb_monitor,read_data_wb,Read_Write);
-    $display("Transaction at %t ns",$time);
-    $display("address from WB_IF: %h",read_address_wb_monitor);
-    $display("data from WB_IF: %h",read_data_wb);
-    $display("write_enable from WB_IF:   %b", Read_Write);
+    // Variable declarations must happen before procedural statements!
+    int file;   // Implicitly static and initialization removed form declaration
+    file = $fopen("out_wb_monitor.txt", "w");
+
+    $timeformat(-9, 2, " ns", 6);
+    #5; // Wait a hair to make sure the signals are defined, to keep from infinitely looping at time t=0
+
+    // Loops indefinitely
+    forever begin
+        // Waits for the cyc_o (cycle valid output) to be asserted, and exits when it is lowered
+        // It logs the transaction details
+        wb_bus.master_monitor(read_address,read_data,rw);
+        // Then when cyc_o is lowered, we display the transaction details as a log
+        $display("Transaction at %t ns",$time);
+        $display("address from WB_IF: %h",read_address);
+        $display("data from WB_IF: %h",read_data);
+        $display("write_enable from WB_IF:   %b\n", rw);
+
+        $fwrite(file, "Transaction at %t ns\n", $time);
+        $fwrite(file, "address from WB_IF: %h\n", read_address);
+        $fwrite(file, "data from WB_IF: %h\n", read_data);
+        $fwrite(file, "write_enable from WB_IF:   %b\n\n", rw);
+    end
+    $fclose(file);
 end
 
-// ****************************************************************************
-// Define the flow of the simulation
-
+// The irq interrupt is an output from the DUT, Pg 17
+// It's active high. It's generated when a byte-level command has been completed
+// and the Interrupt Enable bit (IE) in the Control/Status Register (CSR) is equal to '1'.
+// It can be cleared (reset to '0') by reading CMDR register
+// Read data is a global variable to track the transfers
 task wait4intr ();
+    // Wait for the byte-level command to be completed (signaled by the DUT by irq interrupt pin)
 	wait(irq);
-	wb_bus.master_read(CMDR,read_data_wb);
+    // Clear the interrupt by reading the CMDR Command Register (takes at least 2 clock cycles)
+	wb_bus.master_read(CMDR,read_data);
 endtask
 
+// ****************************************************************************
+// Define the test flow of the simulation
+// We use the Wishbone master Bus Functional Model (type wb_if, instance handle called wb_bus)
+// The wb_bus BFM allows us to send commands on higher levels of abstractions
+// And it takes care of the real time signal generation, and each function takes as long as it needs to
 initial begin : test_flow
 	
-	@(negedge rst);
-	repeat(5) @(posedge clk);
+	@(negedge rst);             // Wait for the negative edge of the reset
+	repeat(5) @(posedge clk);   // wait for five positive edges of the clock
 
 	$display("TOP: Starting the IICMB core by powering up. \n");
- 	//Enable the IICMB core after power-up
+ 	// Enable the IICMB core and interrupts
 	wb_bus.master_write(CSR,8'b11000000);
 
-	$display("TOP: Doing configurations to select I2C bus using WB bus. \n");
-	//Write byte 0x05 to the DPR. This is the ID of desired I2C bus
+    // **********Modified from Example 3 on Pg 22!************
+    // See the I2C Multiple Bus Controller IP Core Specification PDF
+    // Task: Write 32 bytes to a slave with address 0x22, residing on I2C bus #0
+    // System bus actions are as follows:
+    $display("TOP: Doing configurations to select I2C bus using WB bus. \n");
+
+    // 1. Write byte 0x00 to the data/parameter register. This is the ID of desired I2C bus
 	wb_bus.master_write(DPR,8'h0);
 
-	//Write byte “xxxxx110” to the CMDR. This is Set Bus command
+	// 2. Write byte “xxxxx110” to the command register. This is Set Bus command (Pg 7)
 	wb_bus.master_write(CMDR,8'bxxxxx110);
 
-	//Wait for interrupt or until DON bit of CMDR reads '1'
+	// 3. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//WRITE 32 values
+	// ************* WRITE 32 values *************
 
-	//Giving start command
+	// 4. Send the start command
 	wb_bus.master_write(CMDR,8'bxxxxx100);
 
-	//Waiting for Interrupt
+	// 5. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//Giving write command & slave address as 0x22
+	// 6. Write byte 0x44 to the DPR. This is the slave address 0x22 shifted 1 bit to the left +
+    // rightmost bit = '0', which means writing.
 	wb_bus.master_write(DPR,8'h44);
 
-	//Giving write command
+	// 7. Write byte “xxxxx001” to the CMDR. This is Write command.
 	wb_bus.master_write(CMDR,8'bxxxxx001);
 
 	$display("TOP: Giving write command from WB to IICMB to perform 32 bytes write. \n");
-	//Wait for interrupt
+	// 8. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 	for (int i = 0; i<=31; i++) begin
-		//byte to be written
+	    // 9. Write byte 'i' to the DPR. This is the byte to be written.
 		wb_bus.master_write(DPR,i);
 
-		//Write command
+	    // 10. Write byte “xxxxx001” to the CMDR. This is Write command.
 		wb_bus.master_write(CMDR,8'bxxxxx001);
 
-		//Wait for interrupt
+	    // 11. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 		wait4intr();
 	end
 
-	//Giving the stop command
+	// 12. Write byte “xxxxx101” to the CMDR. This is Stop command. It frees the selected I2C bus.
 	wb_bus.master_write(CMDR,8'bxxxxx101);
 	
-	//Wait for interrupt
+	// 13. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//READ 32 values
+	// ************* READ 32 values *************
+    // Modified from Example 5 on Pg 23
+    // See the I2C Multiple Bus Controller IP Core Specification PDF
+    // Task: Read 32 bytes of data from a slave with address 0x22, residing on I2C bus #0
+    // System bus actions are as follows:
 
-	//Giving write command
+	// 4. Write byte “xxxxx100” to the CMDR. This is Start command.
 	wb_bus.master_write(CMDR,8'bxxxxx100);
 
-	//Wait for interrupt
+	// 5. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//Giving write command & slave address as 0x22
+	// 6. Write byte 0x46 to the DPR. This is the slave address 0x23 shifted 1 bit to the left +
+    // rightmost bit is '1' which means reading.
 	wb_bus.master_write(DPR,8'h45);
 
-	//Giving write command
+	// 7. Write byte “xxxxx001” to the CMDR. This is Write command.
 	wb_bus.master_write(CMDR,8'bxxxxx001);
 
-	//Wait for interrupt
+	// 8. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
 	$display("TOP: Giving read command from WB to IICMB to perform 32 bytes read. \n");
@@ -145,20 +189,23 @@ initial begin : test_flow
 
 	for ( int i = 0; i < 32; i++) begin
 		if (i == 31) begin
+            // 17. Write byte “xxxxx011” to the CMDR. This is Read With Nak command.
 			wb_bus.master_write(CMDR,8'bxxxxx011);
+            // 18. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 			wait4intr();
 		end
 		else begin
+            // Read With Ack, Receive a byte with acknowledge.
 			wb_bus.master_write(CMDR,8'bxxxxx010);
 			wait4intr();
 		end
-		// Read DPR to get received byte of data
+		// 19. Read DPR to get received byte of data.
 		wb_bus.master_read(DPR,wb_data);
 	end
-	//Giving the stop command
+	// 20. Write byte “xxxxx101” to the CMDR. This is Stop command
 	wb_bus.master_write(CMDR,8'bxxxxx101);
 	
-	//Wait for interrupt
+	// 21. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
 	//Alternate READ/WRITE 64 values//
@@ -174,73 +221,78 @@ end
 
 
 task read_transfer(input int data_to_be_transfered);
-	//Giving write command
+	// 4. Write byte “xxxxx100” to the CMDR. This is Start command.
 	wb_bus.master_write(CMDR,8'bxxxxx100);
 
-	//Wait for interrupt
+	// 5. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//Giving write command & slave address as 0x22
+	// 6. Write byte 0x46 to the DPR. This is the slave address 0x23 shifted 1 bit to the left +
+    // rightmost bit is '1' which means reading.
 	wb_bus.master_write(DPR,8'h45);
 
-	//Giving write command
+	// 7. Write byte “xxxxx001” to the CMDR. This is Write command.
 	wb_bus.master_write(CMDR,8'bxxxxx001);
 
-	//Wait for interrupt
+	// 8. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
 	if (data_to_be_transfered == 0) begin
+        // 17. Write byte “xxxxx011” to the CMDR. This is Read With Nak command.
 		wb_bus.master_write(CMDR,8'bxxxxx011);
+        // 18. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 		wait4intr();
 	end
 	else begin
+        // Read With Ack, Receive a byte with acknowledge.
 		wb_bus.master_write(CMDR,8'bxxxxx010);
 		wait4intr();
 	end
 
-	// Read DPR to get received byte of data
+	// 19. Read DPR to get received byte of data.
 	wb_bus.master_read(DPR,wb_data);
 
-	//Giving the stop command
+	// 20. Write byte “xxxxx101” to the CMDR. This is Stop command
 	wb_bus.master_write(CMDR,8'bxxxxx101);
 	
-	//Wait for interrupt
+	// 21. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 endtask
 
 task write_transfer(input int final_write_data);
-
-	//Giving start command
+	// 4. Send the start command
 	wb_bus.master_write(CMDR,8'bxxxxx100);
 
-	//Waiting for Interrupt
+	// 5. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//Giving write command & slave address as 0x22
+	// 6. Write byte 0x44 to the DPR. This is the slave address 0x22 shifted 1 bit to the left +
+    // rightmost bit = '0', which means writing.
 	wb_bus.master_write(DPR,8'h44);
 
-	//Giving write command
+	// 7. Write byte “xxxxx001” to the CMDR. This is Write command.
 	wb_bus.master_write(CMDR,8'bxxxxx001);
 
-	//Wait for interrupt
+	// 8. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
-	//byte to be written
+
+	// 9. Write byte final_write_data to the DPR. This is the byte to be written.
 	wb_bus.master_write(DPR,final_write_data);
 
-	//Write command
+	// 10. Write byte “xxxxx001” to the CMDR. This is Write command.
 	wb_bus.master_write(CMDR,8'bxxxxx001);
 
-	//Wait for interrupt
+	// 11. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//Giving the stop command
+	// 12. Write byte “xxxxx101” to the CMDR. This is Stop command. It frees the selected I2C bus.
 	wb_bus.master_write(CMDR,8'bxxxxx101);
-	
-	//Wait for interrupt
+
+	// 13. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
-
-
 endtask
+
+// ******** This is a new part not in lab 1! ********
 
 initial begin : i2c_calling_task
 	bit i2c_op;
@@ -281,6 +333,7 @@ initial begin : i2c_calling_task
 	end
 end
 
+// Timeout after a certain number of cycles
 initial begin : timeout
 	#50000000 $display("stop the simulation");
 	$finish;
@@ -316,6 +369,7 @@ end
 
 // ****************************************************************************
 // Instantiate the Wishbone master Bus Functional Model
+// This allows us to drive the real time signals to the DUT with a higher layer of abstraction
 wb_if       #(
       .ADDR_WIDTH(WB_ADDR_WIDTH),
       .DATA_WIDTH(WB_DATA_WIDTH)
@@ -330,7 +384,7 @@ wb_bus (
   .ack_i(ack),
   .adr_o(adr),
   .we_o(we),
-  // Slave signals
+  // Slave signals. Nothing is connected here yet!
   .cyc_i(),
   .stb_i(),
   .ack_o(),
@@ -344,6 +398,7 @@ wb_bus (
 
 // ****************************************************************************
 // Instantiate the DUT - I2C Multi-Bus Controller
+// And connect it to the same nets as our wishbone interface (wb_if) called wb_bus
 \work.iicmb_m_wb(str) #(.g_bus_num(NUM_I2C_BUSSES)) DUT
   (
     // ------------------------------------
