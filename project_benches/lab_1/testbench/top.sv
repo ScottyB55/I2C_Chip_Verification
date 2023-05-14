@@ -56,14 +56,18 @@ end
 // Monitor Wishbone bus and display transfers in the transcript
 initial begin : wb_monitoring
     $timeformat(-9, 2, " ns", 6);
-    // Waits for the cyc_o (cycle valid output) to be asserted, and exits when it is lowered
-    // It logs the transaction details
-    wb_bus.master_monitor(read_address,read_data,rw);
-    // Then when cyc_o is lowered, we display the transaction details as a log
-    $display("Transaction at %t ns",$time);
-    $display("address from WB_IF: %h",read_address);
-    $display("data from WB_IF: %h",read_data);
-    $display("write_enable from WB_IF:   %b", rw);
+    #5; // Wait a hair to make sure the signals are defined, to keep from infinitely looping at time t=0
+    // Loops indefinitely
+    forever begin
+        // Waits for the cyc_o (cycle valid output) to be asserted, and exits when it is lowered
+        // It logs the transaction details
+        wb_bus.master_monitor(read_address,read_data,rw);
+        // Then when cyc_o is lowered, we display the transaction details as a log
+        $display("Transaction at %t ns",$time);
+        $display("address from WB_IF: %h",read_address);
+        $display("data from WB_IF: %h",read_data);
+        $display("write_enable from WB_IF:   %b", rw);
+    end
 end
 
 // The irq interrupt is an output from the DUT, Pg 17

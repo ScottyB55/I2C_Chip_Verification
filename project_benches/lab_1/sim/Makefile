@@ -5,7 +5,14 @@ include $(ECE745_PROJECT_HOME)/verification_ip/interface_packages/wb_pkg/Makefil
 clean: 
 	rm -rf work *.wlf transcript
 
-comp_I2C_MB:
+comp_ncsu_pkg:
+	vlog $(ECE745_PROJECT_HOME)/verification_ip/ncsu_pkg/ncsu_pkg.sv
+
+comp_i2c_pkg:
+	vlog $(ECE745_PROJECT_HOME)/verification_ip/interface_packages/i2c_pkg/i2c_pkg.sv
+
+
+comp_I2C_MB: comp_ncsu_pkg comp_i2c_pkg
 	vcom ../rtl/iicmb_int_pkg.vhd
 	vcom ../rtl/iicmb_pkg.vhd
 	vcom ../rtl/mbyte.vhd
@@ -18,7 +25,6 @@ comp_I2C_MB:
 	vcom ../rtl/regblock.vhd
 	vcom ../rtl/wishbone.vhd
 	vcom ../rtl/iicmb_m_wb.vhd
-
 
 comp_bench: comp_wb_pkg
 	vlog ../testbench/top.sv
