@@ -98,43 +98,49 @@ initial begin : test_flow
  	// Enable the IICMB core and interrupts
 	wb_bus.master_write(CSR,8'b11xxxxxx);
 
-	// Write byte 0x05 to the data/parameter register. This is the ID of desired I2C bus
+    // **********Modeled off Example 3 on Pg 22!************
+    // See the I2C Multiple Bus Controller IP Core Specification PDF
+    // Task: Write a byte 0x78 to a slave with address 0x22, residing on I2C bus #5
+    // System bus actions are as follows:
+
+	// 1. Write byte 0x05 to the data/parameter register. This is the ID of desired I2C bus
 	wb_bus.master_write(DPR,8'h05);
 
-	//Write byte “xxxxx110” to the command register. This is Set Bus command (Pg 7)
+	// 2. Write byte “xxxxx110” to the command register. This is Set Bus command (Pg 7)
 	wb_bus.master_write(CMDR,8'bxxxxx110);
 
-	//Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
+	// 3. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//Giving start command
+	// 4. Send the start command
 	wb_bus.master_write(CMDR,8'bxxxxx100);
 
-	//Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
+	// 5. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//Giving write command & slave address as 0x22?
+	// 6. Write byte 0x44 to the DPR. This is the slave address 0x22 shifted 1 bit to the left +
+    // rightmost bit = '0', which means writing.
 	wb_bus.master_write(DPR,8'h44);
 
-	//Giving write command
+	// 7. Write byte “xxxxx001” to the CMDR. This is Write command.
 	wb_bus.master_write(CMDR,8'bxxxxx001);
 
-	//Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
+	// 8. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//byte to be written
+	// 9. Write byte 0x78 to the DPR. This is the byte to be written.
 	wb_bus.master_write(DPR,8'h78);
 
-	//Next write command
+	// 10. Write byte “xxxxx001” to the CMDR. This is Write command.
 	wb_bus.master_write(CMDR,8'bxxxxx001);
 
-	//Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
+	// 11. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	// Issue a stop command to free the selected I2C bus 
+	// 12. Write byte “xxxxx101” to the CMDR. This is Stop command. It frees the selected I2C bus.
 	wb_bus.master_write(CMDR,8'bxxxxx101);
 	
-	//Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
+	// 13. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();	
 	
 	@(posedge clk) $finish;
