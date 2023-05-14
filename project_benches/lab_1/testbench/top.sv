@@ -55,8 +55,13 @@ end
 // ****************************************************************************
 // Monitor Wishbone bus and display transfers in the transcript
 initial begin : wb_monitoring
+    // Variable declarations must happen before procedural statements!
+    int file;   // Implicitly static and initialization removed form declaration
+    file = $fopen("out_wb_monitor.txt", "w");
+
     $timeformat(-9, 2, " ns", 6);
     #5; // Wait a hair to make sure the signals are defined, to keep from infinitely looping at time t=0
+
     // Loops indefinitely
     forever begin
         // Waits for the cyc_o (cycle valid output) to be asserted, and exits when it is lowered
@@ -66,8 +71,14 @@ initial begin : wb_monitoring
         $display("Transaction at %t ns",$time);
         $display("address from WB_IF: %h",read_address);
         $display("data from WB_IF: %h",read_data);
-        $display("write_enable from WB_IF:   %b", rw);
+        $display("write_enable from WB_IF:   %b\n", rw);
+
+        $fwrite(file, "Transaction at %t ns\n", $time);
+        $fwrite(file, "address from WB_IF: %h\n", read_address);
+        $fwrite(file, "data from WB_IF: %h\n", read_data);
+        $fwrite(file, "write_enable from WB_IF:   %b\n\n", rw);
     end
+    $fclose(file);
 end
 
 // The irq interrupt is an output from the DUT, Pg 17

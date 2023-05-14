@@ -1,0 +1,65 @@
+Transaction at 200.00 ns ns
+address from WB_IF: 00
+data from WB_IF: c0
+write_enable from WB_IF:   1
+
+Transaction at 240.00 ns ns
+address from WB_IF: 01
+data from WB_IF: 05
+write_enable from WB_IF:   1
+
+Transaction at 280.00 ns ns
+address from WB_IF: 02
+data from WB_IF: 06
+write_enable from WB_IF:   1
+
+Transaction at 320.00 ns ns
+address from WB_IF: 02
+data from WB_IF: 16
+write_enable from WB_IF:   0
+
+Transaction at 350.00 ns ns
+address from WB_IF: 02
+data from WB_IF: 04
+write_enable from WB_IF:   1
+
+Transaction at 5110.00 ns ns
+address from WB_IF: 02
+data from WB_IF: 84
+write_enable from WB_IF:   0
+
+Transaction at 5140.00 ns ns
+address from WB_IF: 01
+data from WB_IF: 44
+write_enable from WB_IF:   1
+
+Transaction at 5180.00 ns ns
+address from WB_IF: 02
+data from WB_IF: 01
+write_enable from WB_IF:   1
+
+Transaction at 95400.00 ns ns
+address from WB_IF: 02
+data from WB_IF: 41
+write_enable from WB_IF:   0
+
+Transaction at 95430.00 ns ns
+address from WB_IF: 01
+data from WB_IF: 78
+write_enable from WB_IF:   1
+
+Transaction at 95470.00 ns ns
+address from WB_IF: 02
+data from WB_IF: 01
+write_enable from WB_IF:   1
+
+Transaction at 185690.00 ns ns
+address from WB_IF: 02
+data from WB_IF: 41
+write_enable from WB_IF:   0
+
+Transaction at 185720.00 ns ns
+address from WB_IF: 02
+data from WB_IF: 05
+write_enable from WB_IF:   1
+
