@@ -27,25 +27,35 @@ interface i2c_if #(
 	event read_data_event;
 	logic data_in = 1'b0;
 	logic output_enable = 1'b0;
+    // Setting output_enable to 0 (as it does with output_enable = 1'b0) disconnects the device from the sda line
+    // (i.e., sets sda to high impedance). This allows the device to listen for the ACK/NACK signal from another device on the bus.
+    // If output_enable is set to 1, the device will drive the sda line with the value of data_in.
 	assign sda = output_enable ? data_in : 1'bz;
 
-	// ----------------------------------------------------------------------------
-	// Task: wait_for_i2c_transfer
-	// Description: Waits for an I2C transfer (either read or write operation) to
-	// complete. Captures the address, operation type, and data, then processes
-	// the operation accordingly.
-	// ----------------------------------------------------------------------------
+	/* ----------------------------------------------------------------------------
+	Task: wait_for_i2c_transfer
+    Description: Waits for an I2C transfer (either read or write operation) to
+	complete. Captures the address, operation type, and data, then processes
+	the operation accordingly.
+
+    Outputs:
+    - op is a binary output that indicates whether the operation is a write operation (op = 1) or a read operation (op = 0). 
+    - write_data[] is an array that captures the data in the case of a write operation.
+	   ---------------------------------------------------------------------------- */
 	task wait_for_i2c_transfer ( output bit op, output bit [I2C_DATA_WIDTH-1:0] write_data []);
 	
+        // initialize local variables that will be used to control the flow of the function and capture the necessary data.
 		automatic bit stop_write;
 		automatic bit repeat_read_address;
 		automatic bit [I2C_ADDR_WIDTH-1:0] capture_address;
 		automatic bit [I2C_DATA_WIDTH-1:0] capture_data;
 		automatic bit [I2C_DATA_WIDTH-1:0] cumulative_capture_data [$];
 		
-			
+        // Wait for a start condition on the I2C bus.
 		start();
+        // Read the address and operation type (read/write) from the I2C bus, and save that into capture_address and op
 		read_address(capture_address, op);
+
 		ack();
 		if(op == 1) begin
 			//$display ("op=%0d" , op);
@@ -194,16 +204,29 @@ interface i2c_if #(
 	endtask
 
 
-	// ----------------------------------------------------------------------------
-	// Task: wait4ack
-	// Description: Waits for an ACK (acknowledge) or NACK (not acknowledge)
-	// signal from the I2C bus.
-	// ----------------------------------------------------------------------------
+	/* ----------------------------------------------------------------------------
+	Task: wait4ack
+	Description: Waits for an ACK (acknowledge) or NACK (not acknowledge) signal from the I2C bus.
+    Output ack_m -> high for ACK, use previous ACK for NACK
+	   ---------------------------------------------------------------------------- */
 	task automatic wait4ack (output bit ack_m);
-		@(negedge scl) output_enable = 1'b0;
-		@(posedge scl) if(sda == 0) begin
-		ack_m = 1'b1;
+        // Wait for a falling edge on the scl (serial clock) signal.
+        // Right after the falling edge of the clock, the data is allowed to change while the clock is low
+        @(negedge scl)
+        // Dsable the output of this BFM simulated I2C side, to allow us to listen for ACK or NACK that will come from
+        // another device connected (typically the DUT)
+		output_enable = 1'b0;
+        // Wait for a rising edge on the scl (serial clock) signal
+        // After this, the data (probs from the DUT) will be stable and ready to be read from the I2C bus
+		@(posedge scl)
+        if(sda == 0) begin
+		    ack_m = 1'b1; // ack
 		end
+        else begin // TODO: maybe take this out! Could cause issues
+            ack_m = 1'b0; // nack
+        end
+        // Typically, if there is an ack number instead of an ack bit, send back the previous successful one
+        // If there is just an ack bit, send ack or nack for each one
 	endtask
 
 
@@ -227,8 +250,7 @@ interface i2c_if #(
 	 
 	// ----------------------------------------------------------------------------
 	// Task: read_address
-	// Description: Reads the address and operation type (read/write) from the
-	// I2C bus.
+	// Description: Reads the address and operation type (read/write) from the I2C bus.
 	// ----------------------------------------------------------------------------
 	task automatic read_address (output bit [I2C_ADDR_WIDTH-1:0] capture_address, output bit op);
 		automatic bit capture_address_queue[$];

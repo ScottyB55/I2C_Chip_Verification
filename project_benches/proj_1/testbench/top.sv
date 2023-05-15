@@ -303,12 +303,15 @@ initial begin : i2c_calling_task
 	bit [I2C_DATA_WIDTH-1:0] read_data [];
 	bit transfer_complete;
 	
-	//Write 32 values
+	// Be present during the transaction where the 32 values are written
+    // i2c_op and write data are actually outputs here
 	i2c_bus.wait_for_i2c_transfer(i2c_op,write_data);
 
-	//Read 32 values
+	// Be present during the transaction where the 32 values are read
+    // i2c_op and write data are actually outputs here
 	i2c_bus.wait_for_i2c_transfer(i2c_op_1,write_data);
-	if( i2c_op_1 == 1 ) begin
+
+	if( i2c_op_1 == 1 ) begin // If 
 		read_data = new [1];
 		read_data[0] = 8'd100;
 		i2c_bus.provide_read_data(read_data,transfer_complete);
