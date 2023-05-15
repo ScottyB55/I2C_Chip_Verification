@@ -56,7 +56,7 @@ class i2c_driver extends ncsu_component#(.T(ncsu_transaction));
             The transaction to be sent
         */
         $cast(i2c_trans_h,trans);
-        i2c_intf_h.provide_read_data(i2c_trans_h.data);
+        i2c_intf_h.write_words_to_I2C_bus(i2c_trans_h.data);
     endtask
 
 endclass : i2c_driver

@@ -1,3 +1,4 @@
+`include "../../verification_ip/interface_packages/i2c_pkg/src/i2c_typedefs.svh"
 `timescale 1ns / 10ps
 
 module top();
@@ -292,43 +293,50 @@ task write_transfer(input int final_write_data);
 	wait4intr();
 endtask
 
-// ******** This is a new part not in lab 1! ********
+// ******** Handle the test flow (wishbone driven) from the I2C side! ********
 
-initial begin : i2c_calling_task
+initial begin : i2c_test_flow_handler
 	bit i2c_op;
 	bit i2c_op_1;
 	bit i2c_op_2;
 	bit i2c_op_3;
-	bit [I2C_DATA_WIDTH-1:0] write_data []; 
-	bit [I2C_DATA_WIDTH-1:0] read_data [];
+    // Keep in mind that wishbone writes become I2C reads through the DUT, and vice versa
+	bit [I2C_DATA_WIDTH-1:0] WBwrite_I2Cread_data []; 
+	bit [I2C_DATA_WIDTH-1:0] WBread_I2Cwrite_data [];
 	bit transfer_complete;
+
+    // Keep in mind that if we 
 	
 	// Wait for a start condition and be present during the transaction (where the 32 values are written).
-	i2c_bus.wait_for_i2c_transfer(i2c_op,write_data); // i2c_op and write data are outputs
-	// Wait for a start condition, be present during the transaction (where the 32 values are read and logged in write_data)
-	i2c_bus.wait_for_i2c_transfer(i2c_op_1,write_data); // i2c_op and write data are outputs
+	i2c_bus.be_present_for_I2C_transfer(i2c_op,WBwrite_I2Cread_data); // i2c_op and write data are outputs
+	// Wait for a start condition, be present during the transaction (where the 32 values are read and logged in WBwrite_I2Cread_data)
+	i2c_bus.be_present_for_I2C_transfer(i2c_op_1,WBwrite_I2Cread_data); // i2c_op and write data are outputs
 
-	if( i2c_op_1 == 1 ) begin // If the second transfer was a 
-		read_data = new [1];
-		read_data[0] = 8'd100;
-		i2c_bus.provide_read_data(read_data,transfer_complete);
-	        read_data[0] = read_data[0] + 1;
+	if( i2c_op_1 == OP_I2C_WRITE ) begin
+        $display("Second transfer was a write");
+		WBread_I2Cwrite_data = new [1];
+		WBread_I2Cwrite_data[0] = 8'd100;
+		i2c_bus.write_words_to_I2C_bus(WBread_I2Cwrite_data,transfer_complete);
+	        WBread_I2Cwrite_data[0] = WBread_I2Cwrite_data[0] + 1;
 		while(!transfer_complete) begin
 			//$display("Entered if condition at the top");
-			i2c_bus.provide_read_data(read_data,transfer_complete);
-	        	read_data[0] = read_data[0] + 1;
+			i2c_bus.write_words_to_I2C_bus(WBread_I2Cwrite_data,transfer_complete);
+	        	WBread_I2Cwrite_data[0] = WBread_I2Cwrite_data[0] + 1;
 		end
 	end
+    else begin
+        $display("Error: was expecting the second transfer to be a write");
+    end
 
 	//Alternate Read Write
-	read_data = new [1];
-	read_data[0] = 8'd63;
+	WBread_I2Cwrite_data = new [1];
+	WBread_I2Cwrite_data[0] = 8'd63;
 	for(int i = 0; i < 64; i++) begin
-		i2c_bus.wait_for_i2c_transfer(i2c_op_2,write_data);	
-		i2c_bus.wait_for_i2c_transfer(i2c_op_3,write_data);
+		i2c_bus.be_present_for_I2C_transfer(i2c_op_2,WBwrite_I2Cread_data);	
+		i2c_bus.be_present_for_I2C_transfer(i2c_op_3,WBwrite_I2Cread_data);
 		if( i2c_op_3 == 1 ) begin
-			i2c_bus.provide_read_data(read_data,transfer_complete);
-		        read_data[0] = read_data[0] - 1;
+			i2c_bus.write_words_to_I2C_bus(WBread_I2Cwrite_data,transfer_complete);
+		        WBread_I2Cwrite_data[0] = WBread_I2Cwrite_data[0] - 1;
 		end
 	end
 end

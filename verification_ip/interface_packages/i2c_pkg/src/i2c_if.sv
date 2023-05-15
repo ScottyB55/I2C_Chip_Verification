@@ -25,27 +25,27 @@ interface i2c_if #(
 	
 	//import i2c_pkg::*;
 	event read_data_event;
-	logic data_in = 1'b0;
+	logic output_bit = 1'b0;
 	logic output_enable = 1'b0;
     // Setting output_enable to 0 (as it does with output_enable = 1'b0) disconnects the device from the sda line
     // (i.e., sets sda to high impedance). This allows the device to listen for the ACK/NACK signal from another device on the bus.
-    // If output_enable is set to 1, the device will drive the sda line with the value of data_in.
-	assign sda = output_enable ? data_in : 1'bz;
+    // If output_enable is set to 1, the device will drive the sda line with the value of output_bit.
+	assign sda = output_enable ? output_bit : 1'bz;
 
 	/* ----------------------------------------------------------------------------
-	Task: wait_for_i2c_transfer
+	Task: be_present_for_I2C_transfer
     Description: Waits for an I2C transfer (either read or write operation) to
 	complete (signaled by the stop condition). Captures the address, operation type, and data, then processes
 	the operation accordingly.
 
     Outputs:
     - op is a binary output that indicates whether the operation is a write operation (op = 1) or a read operation (op = 0). 
-    - write_data[] is an array that captures the data in the case of a write operation.
+    - words_read[] is an array that captures the data in the case of a write operation.
 
     TODO Flaws
     - Doesn't do anything for writes, and doesn't wait for a stop condition for writes either
 	   ---------------------------------------------------------------------------- */
-	task wait_for_i2c_transfer( output bit op, output bit [I2C_DATA_WIDTH-1:0] write_data []);
+	task be_present_for_I2C_transfer( output bit op, output bit [I2C_DATA_WIDTH-1:0] words_read []);
 	
         // initialize local variables that will be used to control the flow of the function and capture the necessary data.
 		automatic bit stop_write;
@@ -60,13 +60,13 @@ interface i2c_if #(
 		read_address(capture_address, op);
         // Send an ack on the bus
 		ack();
-		if(op == 1) begin
+		if(op == OP_I2C_WRITE) begin
             // We would be writing data to the I2C bus
 		end
 		else begin
             // We are reading data from the I2C bus
 			@(negedge scl) output_enable <= 1'b0;
-			read_data(capture_data);
+			read_word_from_I2C_bus(capture_data);
             // Log the first word and send ack
 			cumulative_capture_data.push_back(capture_data);
 			ack();
@@ -91,7 +91,7 @@ interface i2c_if #(
 					begin
                         // If data is read properly, we allow for that
                         //$display("entered else loop capture_data=%0x", capture_data);
-                        read_data(capture_data);
+                        read_word_from_I2C_bus(capture_data);
                         cumulative_capture_data.push_back(capture_data);
                         ack();
                         @(negedge scl) output_enable <= 1'b0;
@@ -100,8 +100,8 @@ interface i2c_if #(
 				disable fork;
 			end
             // Convert the dynamic queue into a dynamic array of bit [I2C_DATA_WIDTH-1:0]
-			write_data = new[cumulative_capture_data.size()];	
-			write_data = { >> {cumulative_capture_data}};
+			words_read = new[cumulative_capture_data.size()];	
+			words_read = { >> {cumulative_capture_data}};
 			//$display("WARNING! should not enter while reading");
 		end
 		//$display("Exiting write task");
@@ -109,31 +109,31 @@ interface i2c_if #(
 	
 	
 	// ----------------------------------------------------------------------------
-	// Task: provide_read_data
-	// Description: Sends the provided read_data to the I2C bus, following the
+	// Task: write_words_to_I2C_bus
+	// Description: Sends the provided words_to_write to the I2C bus, following the
 	// I2C protocol. It breaks if a NACK is received, assuming the transfer is
 	// complete.
 	// ----------------------------------------------------------------------------
-	task provide_read_data( input bit [I2C_DATA_WIDTH-1:0] read_data []);
+	task write_words_to_I2C_bus( input bit [I2C_DATA_WIDTH-1:0] words_to_write []);
 		automatic int size_of_read_data;
 		automatic bit ack_m;
 
-		size_of_read_data = read_data.size();
+		size_of_read_data = words_to_write.size();
 		//$display("sizeof_read_data=%0d \n",size_of_read_data);
 		
-		//$display ("debug1: entered the provide_read_data with read_data = %0x", read_data);
+		//$display ("debug1: entered the write_words_to_I2C_bus with words_to_write = %0x", words_to_write);
 		for(int i = 0; i < size_of_read_data ; i++ ) begin
-				parallel2serial(read_data[i]);
-				wait4ack(ack_m);
-				//$display("ack=%0b or nack received \n",ack_m);
-				if(!ack_m) begin
-					fork
-						begin start(); end
-						begin stop_(); end
-					join_any
-					disable fork;
-				break;
-				end
+            write_word_to_I2C_bus(words_to_write[i]);
+            wait4ack(ack_m);
+            //$display("ack=%0b or nack received \n",ack_m);
+            if(!ack_m) begin
+                fork
+                    begin start(); end
+                    begin stop_(); end
+                join_any
+                disable fork;
+                break;
+            end
 		end
 		//transfer_complete = !ack_m;
 	endtask
@@ -159,7 +159,7 @@ interface i2c_if #(
 		if(op == 1) begin
 			->read_data_event;
 		end
-		read_data(capture_data);
+		read_word_from_I2C_bus(capture_data);
 		//$display("1st read_data capture_data=%0x \n",capture_data);
 		cumulative_capture_data.push_back(capture_data);
 		@(posedge scl);
@@ -181,13 +181,13 @@ interface i2c_if #(
 						if (repeat_read_address == 1) begin
 							read_address(capture_address, op);
 							@(posedge scl)
-							read_data(capture_data);
+							read_word_from_I2C_bus(capture_data);
 							cumulative_capture_data.push_back(capture_data);
 							@(posedge scl);
 							repeat_read_address = 1'b0;
 						end
 						else begin
-							read_data(capture_data);
+							read_word_from_I2C_bus(capture_data);
 							//$display("Dobara read_data capture_data=%0x \n",capture_data);
 							cumulative_capture_data.push_back(capture_data);
 							@(posedge scl);
@@ -229,18 +229,19 @@ interface i2c_if #(
 
 
 	// ----------------------------------------------------------------------------
-	// Task: parallel2serial
+	// Task: write_word_to_I2C_bus
 	// Description: Converts parallel data to serial data to be sent over the
 	// I2C bus.
 	// ----------------------------------------------------------------------------
-	task automatic parallel2serial(input bit [I2C_DATA_WIDTH-1:0] read_data);
-		//$display("parallel2serial read_data =%0b \n",read_data);
-			for(int i = I2C_DATA_WIDTH -1; i >= 0 ; i--) begin
+	task automatic write_word_to_I2C_bus(input bit [I2C_DATA_WIDTH-1:0] word_to_write);
+		//$display("write_word_to_I2C_bus word_to_write =%0b \n",word_to_write);
+		for(int i = I2C_DATA_WIDTH -1; i >= 0 ; i--) begin
 			@(negedge scl) begin 
-				output_enable <= 1'b1; data_in <= read_data[i];
+				output_enable <= 1'b1;
+                output_bit <= word_to_write[i];
 			end
-		//$display("data_in=%0b bit ",data_in);
-		//$display("read_data[i]=%0b bit ",read_data[i]);
+		//$display("output_bit=%0b bit ",output_bit);
+		//$display("word_to_write[i]=%0b bit ",word_to_write[i]);
 		//$display("sda=%0b bit ",sda);
 		end	
 	endtask
@@ -272,9 +273,9 @@ interface i2c_if #(
 	// ----------------------------------------------------------------------------
 	// Task: read_data
 	// Description: Reads data from the I2C bus and stores it in the
-	// capture_data output variable.
+	// word_read output variable.
 	// ----------------------------------------------------------------------------
-	task automatic read_data(output bit [I2C_DATA_WIDTH-1:0] capture_data);
+	task automatic read_word_from_I2C_bus(output bit [I2C_DATA_WIDTH-1:0] word_read);
 		automatic bit capture_data_queue [$]; // declare a dynamic queue
 		
         // Cycle through each bit of the data being read
@@ -286,8 +287,8 @@ interface i2c_if #(
 				capture_data_queue.push_back(sda);
 			end
 		end
-		// Unpack the capture_data_queue into bits and pack it back into the variable capture_data (bit vector)
-		capture_data = { >> {capture_data_queue}};
+		// Unpack the capture_data_queue into bits and pack it back into the variable word_read (bit vector)
+		word_read = { >> {capture_data_queue}};
 	endtask
 	
 
@@ -329,7 +330,7 @@ interface i2c_if #(
 	task automatic ack();
         // Wait for the clock to go low before we update the data on the bus
 		@(negedge scl) begin
-		    data_in <= 1'b0; 
+		    output_bit <= 1'b0; 
 			output_enable <= 1'b1;
 		end
         // Make it consume a whole clock cycle, this is a standard throughout?
