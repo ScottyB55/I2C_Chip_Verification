@@ -35,21 +35,24 @@ interface i2c_if #(
 	/* ----------------------------------------------------------------------------
 	Task: wait_for_i2c_transfer
     Description: Waits for an I2C transfer (either read or write operation) to
-	complete. Captures the address, operation type, and data, then processes
+	complete (signaled by the stop condition). Captures the address, operation type, and data, then processes
 	the operation accordingly.
 
     Outputs:
     - op is a binary output that indicates whether the operation is a write operation (op = 1) or a read operation (op = 0). 
     - write_data[] is an array that captures the data in the case of a write operation.
+
+    TODO Flaws
+    - Doesn't do anything for writes, and doesn't wait for a stop condition for writes either
 	   ---------------------------------------------------------------------------- */
-	task wait_for_i2c_transfer ( output bit op, output bit [I2C_DATA_WIDTH-1:0] write_data []);
+	task wait_for_i2c_transfer( output bit op, output bit [I2C_DATA_WIDTH-1:0] write_data []);
 	
         // initialize local variables that will be used to control the flow of the function and capture the necessary data.
 		automatic bit stop_write;
 		automatic bit repeat_read_address;
 		automatic bit [I2C_ADDR_WIDTH-1:0] capture_address;
 		automatic bit [I2C_DATA_WIDTH-1:0] capture_data;
-		automatic bit [I2C_DATA_WIDTH-1:0] cumulative_capture_data [$];
+		automatic bit [I2C_DATA_WIDTH-1:0] cumulative_capture_data [$]; // dynamic queue to hold an bunch of words
 		
         // Wait for a start condition on the I2C bus.
 		start();
@@ -58,50 +61,45 @@ interface i2c_if #(
         // Send an ack on the bus
 		ack();
 		if(op == 1) begin
-			//$display ("op=%0d" , op);
-			//$display ("debug3: entered the wait_to_i2c_transfer_task with");
+            // We would be writing data to the I2C bus
 		end
 		else begin
+            // We are reading data from the I2C bus
 			@(negedge scl) output_enable <= 1'b0;
 			read_data(capture_data);
+            // Log the first word and send ack
 			cumulative_capture_data.push_back(capture_data);
 			ack();
 			@(negedge scl) output_enable <= 1'b0;
 			stop_write = 1'b0;
 			repeat_read_address = 1'b0;
 			//$display ("debug0: entered the wait_to_i2c_transfer_task with capture_data = %0x", capture_data);
-			while(stop_write == 0) begin
-				fork
+			while(stop_write == 0) begin // Run until we get a stop condition
+				fork // run all of these in parallel
 					begin 
+                        // Waits for another start condition on the I2C bus.
+                        // If this occurs, we signal that a repeat read happened.
 						start();
 						repeat_read_address = 1'b1;
 					end
 					begin
+                        // Waits for a stop condition on the I2C bus.
+                        // If this occurs, we signal stop_write to exit the loop.
 						stop_();
 						stop_write = 1; 
 					end
 					begin
-						if (repeat_read_address == 1) begin
-							//read_address(capture_address, op);
-							//ack();
-							//@(negedge scl) output_enable <= 1'b0;
-							read_data(capture_data);
-							cumulative_capture_data.push_back(capture_data);
-							ack();
-							@(negedge scl) output_enable <= 1'b0;
-							repeat_read_address = 1'b0;
-						end
-						else begin
-							read_data(capture_data);
-							cumulative_capture_data.push_back(capture_data);
-							//$display("entered else loop capture_data=%0x", capture_data);
-							ack();
-							@(negedge scl) output_enable <= 1'b0;
-						end
+                        // If data is read properly, we allow for that
+                        //$display("entered else loop capture_data=%0x", capture_data);
+                        read_data(capture_data);
+                        cumulative_capture_data.push_back(capture_data);
+                        ack();
+                        @(negedge scl) output_enable <= 1'b0;
 					end
-				join_any
+				join_any // If any of these finish, disable the rest of them and start them all again if stop_write == 0
 				disable fork;
 			end
+            // Convert the dynamic queue into a dynamic array of bit [I2C_DATA_WIDTH-1:0]
 			write_data = new[cumulative_capture_data.size()];	
 			write_data = { >> {cumulative_capture_data}};
 			//$display("WARNING! should not enter while reading");
@@ -116,7 +114,7 @@ interface i2c_if #(
 	// I2C protocol. It breaks if a NACK is received, assuming the transfer is
 	// complete.
 	// ----------------------------------------------------------------------------
-	task provide_read_data ( input bit [I2C_DATA_WIDTH-1:0] read_data []);
+	task provide_read_data( input bit [I2C_DATA_WIDTH-1:0] read_data []);
 		automatic int size_of_read_data;
 		automatic bit ack_m;
 
@@ -146,7 +144,7 @@ interface i2c_if #(
 	// Description: Monitors the I2C bus and captures the address, operation type,
 	// and the received data in an array.
 	// ----------------------------------------------------------------------------
-	task monitor ( output bit [I2C_ADDR_WIDTH-1:0] addr, output bit op, output bit [I2C_DATA_WIDTH-1:0] data []);
+	task monitor( output bit [I2C_ADDR_WIDTH-1:0] addr, output bit op, output bit [I2C_DATA_WIDTH-1:0] data []);
 		automatic bit stop_write;
 		automatic bit repeat_read_address;
 		automatic bit [I2C_ADDR_WIDTH-1:0] capture_address;
@@ -209,7 +207,7 @@ interface i2c_if #(
 	Description: Waits for an ACK (acknowledge) or NACK (not acknowledge) signal from the I2C bus.
     Output ack_m -> high for ACK, use previous ACK for NACK
 	   ---------------------------------------------------------------------------- */
-	task automatic wait4ack (output bit ack_m);
+	task automatic wait4ack(output bit ack_m);
         // Wait for a falling edge on the scl (serial clock) signal.
         // Right after the falling edge of the clock, the data is allowed to change while the clock is low
         @(negedge scl)
@@ -235,7 +233,7 @@ interface i2c_if #(
 	// Description: Converts parallel data to serial data to be sent over the
 	// I2C bus.
 	// ----------------------------------------------------------------------------
-	task automatic parallel2serial (input bit [I2C_DATA_WIDTH-1:0] read_data);
+	task automatic parallel2serial(input bit [I2C_DATA_WIDTH-1:0] read_data);
 		//$display("parallel2serial read_data =%0b \n",read_data);
 			for(int i = I2C_DATA_WIDTH -1; i >= 0 ; i--) begin
 			@(negedge scl) begin 
@@ -253,7 +251,7 @@ interface i2c_if #(
 	// Description: Reads the address and operation type (read/write) from the I2C bus.
     // 1 for write, 0 for read
 	// ----------------------------------------------------------------------------
-	task automatic read_address (output bit [I2C_ADDR_WIDTH-1:0] capture_address, output bit op);
+	task automatic read_address(output bit [I2C_ADDR_WIDTH-1:0] capture_address, output bit op);
 		automatic bit capture_address_queue[$];
 		
 		for(int i= I2C_ADDR_WIDTH-1; i >= 0; i--) begin
@@ -276,15 +274,19 @@ interface i2c_if #(
 	// Description: Reads data from the I2C bus and stores it in the
 	// capture_data output variable.
 	// ----------------------------------------------------------------------------
-	task automatic read_data (output bit [I2C_DATA_WIDTH-1:0] capture_data);
-		automatic bit capture_data_queue [$];
+	task automatic read_data(output bit [I2C_DATA_WIDTH-1:0] capture_data);
+		automatic bit capture_data_queue [$]; // declare a dynamic queue
 		
+        // Cycle through each bit of the data being read
 		for(int i=(I2C_DATA_WIDTH-1); i >= 0; i--) begin
+            // Sample data shortly at the posedge of the clock
+            // The first bit transmitted will become the LSB and the last bit transmitted will become the MSB
+            // This is the opposite of typical I2C
 			@(posedge scl) begin 
 				capture_data_queue.push_back(sda);
 			end
 		end
-		
+		// Unpack the capture_data_queue into bits and pack it back into the variable capture_data (bit vector)
 		capture_data = { >> {capture_data_queue}};
 	endtask
 	
@@ -293,7 +295,7 @@ interface i2c_if #(
 	// Task: start
 	// Description: Waits for a start condition on the I2C bus.
 	// ----------------------------------------------------------------------------
-	task automatic start ();
+	task automatic start();
 		automatic bit start_flag = 1'b1;
 		do begin
 			@(negedge sda) begin
@@ -309,7 +311,7 @@ interface i2c_if #(
 	// Task: stop_
 	// Description: Waits for a stop condition on the I2C bus.
 	// ----------------------------------------------------------------------------
-	task automatic stop_ ();
+	task automatic stop_();
 		automatic bit stop_flag = 1'b1;
 		do begin
 			@(posedge sda) begin
@@ -324,13 +326,14 @@ interface i2c_if #(
 	// Task: ack
 	// Description: Sends an ACK (acknowledge) signal on the I2C bus.
 	// ----------------------------------------------------------------------------
-	task automatic ack ();
+	task automatic ack();
+        // Wait for the clock to go low before we update the data on the bus
 		@(negedge scl) begin
-		       	data_in <= 1'b0; 
+		    data_in <= 1'b0; 
 			output_enable <= 1'b1;
 		end
+        // Make it consume a whole clock cycle, this is a standard throughout?
 		@(posedge scl);
-		//@(negedge scl) output_enable <= 1'b0;
 	endtask
 
 endinterface
