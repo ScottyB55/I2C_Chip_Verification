@@ -55,7 +55,7 @@ interface i2c_if #(
 		start();
         // Read the address and operation type (read/write) from the I2C bus, and save that into capture_address and op
 		read_address(capture_address, op);
-
+        // Send an ack on the bus
 		ack();
 		if(op == 1) begin
 			//$display ("op=%0d" , op);
@@ -222,11 +222,11 @@ interface i2c_if #(
         if(sda == 0) begin
 		    ack_m = 1'b1; // ack
 		end
-        else begin // TODO: maybe take this out! Could cause issues
+        else begin // TODO: potentially take this out! Could cause issues. Vishal's code remembered the previous in the event of NACK
             ack_m = 1'b0; // nack
         end
-        // Typically, if there is an ack number instead of an ack bit, send back the previous successful one
-        // If there is just an ack bit, send ack or nack for each one
+        // Typically, if there is an ack number and not an ack bit, we send back the previous successful ack number
+        // If there is just an ack bit, send ack or nack for each one, not the previous
 	endtask
 
 
@@ -251,6 +251,7 @@ interface i2c_if #(
 	// ----------------------------------------------------------------------------
 	// Task: read_address
 	// Description: Reads the address and operation type (read/write) from the I2C bus.
+    // 1 for write, 0 for read
 	// ----------------------------------------------------------------------------
 	task automatic read_address (output bit [I2C_ADDR_WIDTH-1:0] capture_address, output bit op);
 		automatic bit capture_address_queue[$];
