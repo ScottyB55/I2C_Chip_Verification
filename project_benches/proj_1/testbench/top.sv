@@ -1,4 +1,4 @@
-`include "../../verification_ip/interface_packages/i2c_pkg/src/i2c_typedefs.svh"
+`include "../../../verification_ip/interface_packages/i2c_pkg/src/i2c_typedefs.svh"
 `timescale 1ns / 10ps
 
 module top();
@@ -72,17 +72,17 @@ initial begin : wb_monitoring
     forever begin
         // Waits for the cyc_o (cycle valid output) to be asserted, and exits when it is lowered
         // It logs the transaction details
-        wb_bus.master_monitor(read_address,read_data,rw);
+        wb_bus.master_monitor(read_address_wb_monitor,read_data_wb,Read_Write);
         // Then when cyc_o is lowered, we display the transaction details as a log
         $display("Transaction at %t ns",$time);
-        $display("address from WB_IF: %h",read_address);
-        $display("data from WB_IF: %h",read_data);
-        $display("write_enable from WB_IF:   %b\n", rw);
+        $display("address from WB_IF: %h",read_address_wb_monitor);
+        $display("data from WB_IF: %h",read_data_wb);
+        $display("write_enable from WB_IF:   %b\n", Read_Write);
 
         $fwrite(file, "Transaction at %t ns\n", $time);
-        $fwrite(file, "address from WB_IF: %h\n", read_address);
-        $fwrite(file, "data from WB_IF: %h\n", read_data);
-        $fwrite(file, "write_enable from WB_IF:   %b\n\n", rw);
+        $fwrite(file, "address from WB_IF: %h\n", read_address_wb_monitor);
+        $fwrite(file, "data from WB_IF: %h\n", read_data_wb);
+        $fwrite(file, "write_enable from WB_IF:   %b\n\n", Read_Write);
     end
     $fclose(file);
 end
@@ -96,7 +96,7 @@ task wait4intr ();
     // Wait for the byte-level command to be completed (signaled by the DUT by irq interrupt pin)
 	wait(irq);
     // Clear the interrupt by reading the CMDR Command Register (takes at least 2 clock cycles)
-	wb_bus.master_read(CMDR,read_data);
+	wb_bus.master_read(CMDR,read_data_wb);
 endtask
 
 // ****************************************************************************
@@ -318,7 +318,7 @@ initial begin : i2c_test_flow_handler
 
     // Now, handle the wishbone test flow reading the 32 words
     // We will write the words back into the I2C bus so that the wishbone side can read it
-	if( i2c_op_1 == OP_I2C_WRITE ) begin
+	if( i2c_op_1 == `OP_I2C_WRITE ) begin
         $display("Pass: Previous (2nd) transfer was a write");
 		WBread_I2Cwrite_data = new [1];
 		WBread_I2Cwrite_data[0] = 8'd100; // Start at 100
@@ -343,7 +343,7 @@ initial begin : i2c_test_flow_handler
 		i2c_bus.be_present_for_I2C_transfer(i2c_op_2,WBwrite_I2Cread_data);	
         // This should correspond to when the wishbone test flow writes the word
 		i2c_bus.be_present_for_I2C_transfer(i2c_op_3,WBwrite_I2Cread_data);
-		if( i2c_op_3 == OP_I2C_WRITE ) begin
+		if( i2c_op_3 == `OP_I2C_WRITE ) begin
             // Now, handle the wishbone test flow reading the word
             // We will write the word back into the I2C bus so that the wishbone side can read it
 			i2c_bus.write_words_to_I2C_bus(WBread_I2Cwrite_data,transfer_complete);
@@ -383,7 +383,7 @@ initial begin : monitor_i2c_bus
     #200
     forever begin
         i2c_bus.monitor(I2C_address,Read_Write,I2C_data);
-        if (Read_Write==OP_I2C_WRITE) begin 
+        if (Read_Write==`OP_I2C_WRITE) begin 
             $display("I2C_BUS WRITE Transfer: [%0t]\n I2C_address = %h\n Read_Write = READ\n I2C_data = %p\n",$time,I2C_address,I2C_data);
         end
         else begin

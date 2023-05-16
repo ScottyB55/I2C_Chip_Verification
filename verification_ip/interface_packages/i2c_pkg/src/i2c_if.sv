@@ -60,7 +60,7 @@ interface i2c_if #(
 		read_address(capture_address, op);
         // Send an ack on the bus
 		ack();
-		if(op == OP_I2C_WRITE) begin
+		if(op == `OP_I2C_WRITE) begin
             // We would be writing data to the I2C bus
 		end
 		else begin
@@ -159,7 +159,7 @@ interface i2c_if #(
 
 		addr <= capture_address;
 		@(posedge scl);
-		if(op == OP_I2C_WRITE) begin
+		if(op == `OP_I2C_WRITE) begin
             // Trigger a read data event which may be picked up in the i2cmb_generator
 			->read_data_event;
 		end
