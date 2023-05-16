@@ -104,7 +104,7 @@ endtask
 // We use the Wishbone master Bus Functional Model (type wb_if, instance handle called wb_bus)
 // The wb_bus BFM allows us to send commands on higher levels of abstractions
 // And it takes care of the real time signal generation, and each function takes as long as it needs to
-initial begin : test_flow
+initial begin : wishbone_master_test_flow
 	
 	@(negedge rst);             // Wait for the negative edge of the reset
 	repeat(5) @(posedge clk);   // wait for five positive edges of the clock
@@ -209,19 +209,19 @@ initial begin : test_flow
 	// 21. Wait for interrupt to signal that a byte-level command has been completed, and then clear the interrupt
 	wait4intr();
 
-	//Alternate READ/WRITE 64 values//
+	//Alternate WRITE/READ 64 values//
 	$display("TOP: Doing alternative write and read from Wishbone to I2C slave. \n");
 
 	for(int i=0; i < 64; i++) begin
-		write_transfer(64 + i);
-		read_transfer(63 - i);
+		write_word_to_WB_bus(64 + i);
+		read_word_from_WB_bus(63 - i);
 	end	
 
 	@(posedge clk) $finish;
 end
 
 
-task read_transfer(input int data_to_be_transfered);
+task read_word_from_WB_bus(input int data_to_be_transfered);
 	// 4. Write byte “xxxxx100” to the CMDR. This is Start command.
 	wb_bus.master_write(CMDR,8'bxxxxx100);
 
@@ -260,7 +260,7 @@ task read_transfer(input int data_to_be_transfered);
 	wait4intr();
 endtask
 
-task write_transfer(input int final_write_data);
+task write_word_to_WB_bus(input int final_write_data);
 	// 4. Send the start command
 	wb_bus.master_write(CMDR,8'bxxxxx100);
 
@@ -294,6 +294,8 @@ task write_transfer(input int final_write_data);
 endtask
 
 // ******** Handle the test flow (wishbone driven) from the I2C side! ********
+// TODO: a lot of this is hard coded! As in we write what we know we read hard coded
+// Instead of what we should do: read it, then write back what we read
 
 initial begin : i2c_test_flow_handler
 	bit i2c_op;
@@ -305,39 +307,52 @@ initial begin : i2c_test_flow_handler
 	bit [I2C_DATA_WIDTH-1:0] WBread_I2Cwrite_data [];
 	bit transfer_complete;
 
-    // Keep in mind that if we 
+    // Everything here stems from the wishbone_master_test_flow
 	
-	// Wait for a start condition and be present during the transaction (where the 32 values are written).
+	// Wait for a start condition and be present during the transaction
+    // This should correspond to when the wishbone test flow writes the address
 	i2c_bus.be_present_for_I2C_transfer(i2c_op,WBwrite_I2Cread_data); // i2c_op and write data are outputs
-	// Wait for a start condition, be present during the transaction (where the 32 values are read and logged in WBwrite_I2Cread_data)
-	i2c_bus.be_present_for_I2C_transfer(i2c_op_1,WBwrite_I2Cread_data); // i2c_op and write data are outputs
+	// Wait for a start condition and be present during the transaction
+    // This should correspond to when the wishbone test flow writes the 32 words
+	i2c_bus.be_present_for_I2C_transfer(i2c_op_1,WBwrite_I2Cread_data); // i2c_op_1 and write data are outputs
 
+    // Now, handle the wishbone test flow reading the 32 words
+    // We will write the words back into the I2C bus so that the wishbone side can read it
 	if( i2c_op_1 == OP_I2C_WRITE ) begin
-        $display("Second transfer was a write");
+        $display("Pass: Previous (2nd) transfer was a write");
 		WBread_I2Cwrite_data = new [1];
-		WBread_I2Cwrite_data[0] = 8'd100;
+		WBread_I2Cwrite_data[0] = 8'd100; // Start at 100
 		i2c_bus.write_words_to_I2C_bus(WBread_I2Cwrite_data,transfer_complete);
 	        WBread_I2Cwrite_data[0] = WBread_I2Cwrite_data[0] + 1;
+        // transfer_complete is whether we get an ack or not from the DUT after writing a word to the bus.
 		while(!transfer_complete) begin
-			//$display("Entered if condition at the top");
 			i2c_bus.write_words_to_I2C_bus(WBread_I2Cwrite_data,transfer_complete);
-	        	WBread_I2Cwrite_data[0] = WBread_I2Cwrite_data[0] + 1;
+            // Increment the word that we write to the I2C bus
+	        WBread_I2Cwrite_data[0] = WBread_I2Cwrite_data[0] + 1;
 		end
 	end
     else begin
-        $display("Error: was expecting the second transfer to be a write");
+        $display("Error: was expecting the previous (2nd) transfer to be a write");
     end
 
-	//Alternate Read Write
+	//Alternate Write / Read
 	WBread_I2Cwrite_data = new [1];
 	WBread_I2Cwrite_data[0] = 8'd63;
 	for(int i = 0; i < 64; i++) begin
+        // This should correspond to when the wishbone test flow writes the address
 		i2c_bus.be_present_for_I2C_transfer(i2c_op_2,WBwrite_I2Cread_data);	
+        // This should correspond to when the wishbone test flow writes the word
 		i2c_bus.be_present_for_I2C_transfer(i2c_op_3,WBwrite_I2Cread_data);
-		if( i2c_op_3 == 1 ) begin
+		if( i2c_op_3 == OP_I2C_WRITE ) begin
+            // Now, handle the wishbone test flow reading the word
+            // We will write the word back into the I2C bus so that the wishbone side can read it
 			i2c_bus.write_words_to_I2C_bus(WBread_I2Cwrite_data,transfer_complete);
-		        WBread_I2Cwrite_data[0] = WBread_I2Cwrite_data[0] - 1;
+            // Decrement the word that we will write for next time
+		    WBread_I2Cwrite_data[0] = WBread_I2Cwrite_data[0] - 1;
 		end
+        else begin
+            $display("Error: was expecting the alternate read write 2nd transfer to be write");
+        end
 	end
 end
 
@@ -347,7 +362,7 @@ initial begin : timeout
 	$finish;
 end
 
-// Instantiate the I2C slave
+// Instantiate the I2C slave BFM
 i2c_if      #(
     .I2C_ADDR_WIDTH(I2C_ADDR_WIDTH),
     .I2C_DATA_WIDTH(I2C_DATA_WIDTH),
@@ -360,18 +375,20 @@ i2c_bus (
 );
 
 // Calling monitor from I2C interface
+// TODO Vishal's code had the Write and Read reversed here
 initial begin : monitor_i2c_bus
     bit [I2C_ADDR_WIDTH-1:0] I2C_address;
     bit Read_Write;
     bit [I2C_DATA_WIDTH-1:0] I2C_data [];
-    #200    forever begin
+    #200
+    forever begin
         i2c_bus.monitor(I2C_address,Read_Write,I2C_data);
-        if (Read_Write==1) begin 
-		$display("I2C_BUS READ Transfer: [%0t]\n I2C_address = %h\n Read_Write = READ\n I2C_data = %p\n",$time,I2C_address,I2C_data);
-	end
-	else begin
-		$display("I2C_BUS WRITE Transfer: [%0t]\n I2C_address = %h\n Read_Write = WRITE\n I2C_data = %p\n",$time,I2C_address,I2C_data);
-	end
+        if (Read_Write==OP_I2C_WRITE) begin 
+            $display("I2C_BUS WRITE Transfer: [%0t]\n I2C_address = %h\n Read_Write = READ\n I2C_data = %p\n",$time,I2C_address,I2C_data);
+        end
+        else begin
+            $display("I2C_BUS READ  Transfer: [%0t]\n I2C_address = %h\n Read_Write = WRITE\n I2C_data = %p\n",$time,I2C_address,I2C_data);
+        end
     end
 end
 
@@ -398,7 +415,7 @@ wb_bus (
   .ack_o(),
   .adr_i(),
   .we_i(),
-  // Shred signals
+  // Shared signals
   .dat_o(dat_wr_o),
   .dat_i(dat_rd_i)
   );

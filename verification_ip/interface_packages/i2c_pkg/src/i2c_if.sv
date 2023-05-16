@@ -99,7 +99,7 @@ interface i2c_if #(
 				join_any // If any of these finish, disable the rest of them and start them all again if stop_write == 0
 				disable fork;
 			end
-            // Convert the dynamic queue into a dynamic array of bit [I2C_DATA_WIDTH-1:0]
+            // Convert the dynamic queue into a dynamic array of words (bit [I2C_DATA_WIDTH-1:0])
 			words_read = new[cumulative_capture_data.size()];	
 			words_read = { >> {cumulative_capture_data}};
 			//$display("WARNING! should not enter while reading");
@@ -108,13 +108,13 @@ interface i2c_if #(
 	endtask
 	
 	
-	// ----------------------------------------------------------------------------
-	// Task: write_words_to_I2C_bus
-	// Description: Sends the provided words_to_write to the I2C bus, following the
-	// I2C protocol. It breaks if a NACK is received, assuming the transfer is
-	// complete.
-	// ----------------------------------------------------------------------------
-	task write_words_to_I2C_bus( input bit [I2C_DATA_WIDTH-1:0] words_to_write []);
+	/* ----------------------------------------------------------------------------
+	Task: write_words_to_I2C_bus
+	Description: Sends the provided words_to_write to the I2C bus, following the
+	I2C protocol. It breaks if a NACK is received, assuming the transfer is complete
+	TODO: Vishal had initially commented out the transfer_complete stuff!
+	   ---------------------------------------------------------------------------- */
+	task write_words_to_I2C_bus( input bit [I2C_DATA_WIDTH-1:0] words_to_write [], output bit transfer_complete);
 		automatic int size_of_read_data;
 		automatic bit ack_m;
 
@@ -135,15 +135,16 @@ interface i2c_if #(
                 break;
             end
 		end
-		//transfer_complete = !ack_m;
+		transfer_complete = !ack_m;
 	endtask
 	
 	
-	// ----------------------------------------------------------------------------
-	// Task: monitor
-	// Description: Monitors the I2C bus and captures the address, operation type,
-	// and the received data in an array.
-	// ----------------------------------------------------------------------------
+	/* ----------------------------------------------------------------------------
+	Task: monitor
+	Description: Monitors the I2C bus and captures the address, operation type, and the received data 
+    of a single transaction. It's supposed to run in parallel with everything else, and be called over
+    and over again as soon as the previous one completes.
+	   ---------------------------------------------------------------------------- */
 	task monitor( output bit [I2C_ADDR_WIDTH-1:0] addr, output bit op, output bit [I2C_DATA_WIDTH-1:0] data []);
 		automatic bit stop_write;
 		automatic bit repeat_read_address;
@@ -151,14 +152,18 @@ interface i2c_if #(
 		automatic bit [I2C_DATA_WIDTH-1:0] capture_data;
 		automatic bit [I2C_DATA_WIDTH-1:0] cumulative_capture_data [$];
 		
-			
 		start();
+
+        // Read the address and operation type (read/write) from the I2C bus.
 		read_address(capture_address, op);
+
 		addr <= capture_address;
 		@(posedge scl);
-		if(op == 1) begin
+		if(op == OP_I2C_WRITE) begin
+            // Trigger a read data event which may be picked up in the i2cmb_generator
 			->read_data_event;
 		end
+
 		read_word_from_I2C_bus(capture_data);
 		//$display("1st read_data capture_data=%0x \n",capture_data);
 		cumulative_capture_data.push_back(capture_data);
@@ -167,36 +172,33 @@ interface i2c_if #(
 		stop_write = 1'b0;
 		repeat_read_address = 1'b0;
 
-		while(stop_write == 0) begin
-			fork
-				begin 
-					start();
-					repeat_read_address = 1'b0;
+        // Almost identical to the code in task: be_present_for_I2C_transfer
+        // Except that we don't send anything like ack
+		while(stop_write == 0) begin // Run until we get a stop condition
+            fork // run all of these in parallel
+                begin 
+                    // Waits for another start condition on the I2C bus.
+                    // If this occurs, we signal that a repeat read happened.
+                    start();
+                    repeat_read_address = 1'b1;
+                end
+                begin
+                    // Waits for a stop condition on the I2C bus.
+                    // If this occurs, we signal stop_write to exit the loop.
+                    stop_();
+                    stop_write = 1; 
+                end
+                begin
+                    read_word_from_I2C_bus(capture_data);
+                    //$display("Dobara read_data capture_data=%0x \n",capture_data);
+                    cumulative_capture_data.push_back(capture_data);
+                    @(posedge scl);
 				end
-				begin
-					stop_();
-					stop_write = 1; 
-				end
-				begin
-						if (repeat_read_address == 1) begin
-							read_address(capture_address, op);
-							@(posedge scl)
-							read_word_from_I2C_bus(capture_data);
-							cumulative_capture_data.push_back(capture_data);
-							@(posedge scl);
-							repeat_read_address = 1'b0;
-						end
-						else begin
-							read_word_from_I2C_bus(capture_data);
-							//$display("Dobara read_data capture_data=%0x \n",capture_data);
-							cumulative_capture_data.push_back(capture_data);
-							@(posedge scl);
-						end
-				end
-			join_any
+			join_any // If any of these finish, disable the rest of them and start them all again if stop_write == 0
 			disable fork;
-		data = new[cumulative_capture_data.size()];	
-		data = { >> {cumulative_capture_data}};	
+            // Convert the dynamic queue into a dynamic array of words
+            data = new[cumulative_capture_data.size()];	
+            data = { >> {cumulative_capture_data}};	
 		end
 
 	endtask
@@ -247,11 +249,11 @@ interface i2c_if #(
 	endtask
 	
 	 
-	// ----------------------------------------------------------------------------
-	// Task: read_address
-	// Description: Reads the address and operation type (read/write) from the I2C bus.
-    // 1 for write, 0 for read
-	// ----------------------------------------------------------------------------
+	/* ----------------------------------------------------------------------------
+	Task: read_address
+	Description: Reads the address and operation type (read/write) from the I2C bus.
+    1 for write, 0 for read
+	   ---------------------------------------------------------------------------- */
 	task automatic read_address(output bit [I2C_ADDR_WIDTH-1:0] capture_address, output bit op);
 		automatic bit capture_address_queue[$];
 		
