@@ -17,13 +17,15 @@ class i2cmb_testcase extends i2cmb_test;
 		super.new(name,parent);
 	endfunction : new
 
-
+    // Runs the testcase
 	virtual task run();
 
 		bit [WB_BYTE_SIZE-1:0] read_data []; 
 		bit [WB_BYTE_SIZE-1:0] alt_read_data []; 
 		bit [WB_BYTE_SIZE-1:0] alt_write_data []; 
 
+
+        // -------------------- Writing --------------------
 		//$display("Test1: Write 0 to 31 to i2c bus from wishbone master \n");
 
   		write_data = new[32];
@@ -38,7 +40,8 @@ class i2cmb_testcase extends i2cmb_test;
 		join_any
 		disable fork;
 
-		// Reading
+
+		// -------------------- Reading --------------------
 		read_transactions_wb = new[1];
 		read_transactions_wb[0] = new("100-131_Read", SLAVE_ADDRESS, READ, 32, bus_num);
 		super.gen_h.set_master_transactions(read_transactions_wb);
@@ -60,7 +63,8 @@ class i2cmb_testcase extends i2cmb_test;
 		join_any
 		disable fork;
 
-		// Alternate read and write
+
+	    // -------------------- Alternate read and write --------------------
 		alt_master_transactions = new[128]; 
 		alt_slave_transactions = new[64];
 		alt_read_data = new[1];
@@ -93,6 +97,7 @@ class i2cmb_testcase extends i2cmb_test;
 		$display("TEST COMPLETE. \n");
 
 	endtask : run
+
 
     // Populates the write_data array starting at global write_value up until input max_value (exclusive)
 	task write_consecutive_data (input max_value);

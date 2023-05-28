@@ -109,7 +109,8 @@ class i2cmb_generator extends ncsu_component#(.T(ncsu_transaction));
     endtask
 
     /**
-    * The `read_write_permission` task checks the read and write permissions for the registers and compares the actual and expected data values.
+    * The `read_write_permission` task checks the read and write permissions for the registers and 
+    * compares the actual and expected data values.
     */
     task read_write_permission();
         bit [WB_DATA-1:0] read_data;

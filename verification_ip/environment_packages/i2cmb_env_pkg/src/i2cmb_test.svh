@@ -32,6 +32,7 @@ class i2cmb_test extends ncsu_component;
 
     // Task to run the different test cases
     virtual task run();
+        // Run the i2c and WB monitors (within the agent) in parallel
         env_h.run();
         // Depending on the "testcase_handle" command-line argument, run the appropriate test case
         // Each of these functions in the generator class is assumed to initiate a specific test case
