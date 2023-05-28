@@ -94,6 +94,7 @@ class i2cmb_testcase extends i2cmb_test;
 
 	endtask : run
 
+    // Populates the write_data array starting at global write_value up until input max_value (exclusive)
 	task write_consecutive_data (input max_value);
 
 		while(write_value < max_value) begin

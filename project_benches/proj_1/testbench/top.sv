@@ -293,7 +293,7 @@ task write_word_to_WB_bus(input int final_write_data);
 	wait4intr();
 endtask
 
-// ******** Handle the test flow (wishbone driven) from the I2C side! ********
+// ******** Handle the test flow (produced through DUT from wishbone) from the I2C side! ********
 // TODO: a lot of this is hard coded! As in we write what we know we read hard coded
 // Instead of what we should do: read it, then write back what we read
 
@@ -307,7 +307,7 @@ initial begin : i2c_test_flow_handler
 	bit [I2C_DATA_WIDTH-1:0] WBread_I2Cwrite_data [];
 	bit transfer_complete;
 
-    // Everything here stems from the wishbone_master_test_flow
+    // Everything here corresponds to the wishbone_master_test_flow (I2C expected equivalent)
 	
 	// Wait for a start condition and be present during the transaction
     // This should correspond to when the wishbone test flow writes the address
@@ -321,10 +321,11 @@ initial begin : i2c_test_flow_handler
 	if( i2c_op_1 == `OP_I2C_WRITE ) begin
         $display("Pass: Previous (2nd) transfer was a write");
 		WBread_I2Cwrite_data = new [1];
-		WBread_I2Cwrite_data[0] = 8'd100; // Start at 100
+		WBread_I2Cwrite_data[0] = 8'd100; // Start at 100, and write the first word, then increment
 		i2c_bus.write_words_to_I2C_bus(WBread_I2Cwrite_data,transfer_complete);
 	        WBread_I2Cwrite_data[0] = WBread_I2Cwrite_data[0] + 1;
-        // transfer_complete is whether we get an ack or not from the DUT after writing a word to the bus.
+        // Keep writing words and incrementing until the DUT no longer wants us to
+        // transfer_complete occurs when we no longer get an ack from the DUT after writing a word to the bus.
 		while(!transfer_complete) begin
 			i2c_bus.write_words_to_I2C_bus(WBread_I2Cwrite_data,transfer_complete);
             // Increment the word that we write to the I2C bus
@@ -339,12 +340,12 @@ initial begin : i2c_test_flow_handler
 	WBread_I2Cwrite_data = new [1];
 	WBread_I2Cwrite_data[0] = 8'd63;
 	for(int i = 0; i < 64; i++) begin
-        // This should correspond to when the wishbone test flow writes the address
+        // This should correspond to when the wishbone test flow writes the address (i2c read)
 		i2c_bus.be_present_for_I2C_transfer(i2c_op_2,WBwrite_I2Cread_data);	
-        // This should correspond to when the wishbone test flow writes the word
+        // This should correspond to when the wishbone test flow writes the word (i2c read)
 		i2c_bus.be_present_for_I2C_transfer(i2c_op_3,WBwrite_I2Cread_data);
 		if( i2c_op_3 == `OP_I2C_WRITE ) begin
-            // Now, handle the wishbone test flow reading the word
+            // Now, handle wishbone reading = I2C writing
             // We will write the word back into the I2C bus so that the wishbone side can read it
 			i2c_bus.write_words_to_I2C_bus(WBread_I2Cwrite_data,transfer_complete);
             // Decrement the word that we will write for next time
@@ -395,7 +396,7 @@ end
 // ****************************************************************************
 // Instantiate the Wishbone master Bus Functional Model
 // This allows us to drive the real time signals to the DUT with a higher layer of abstraction
-wb_if       #(
+wb_if #(
       .ADDR_WIDTH(WB_ADDR_WIDTH),
       .DATA_WIDTH(WB_DATA_WIDTH)
       )
@@ -409,7 +410,7 @@ wb_bus (
   .ack_i(ack),
   .adr_o(adr),
   .we_o(we),
-  // Slave signals. Nothing is connected here yet!
+  // Slave signals. Nothing is connected here yet. TODO: Why?
   .cyc_i(),
   .stb_i(),
   .ack_o(),

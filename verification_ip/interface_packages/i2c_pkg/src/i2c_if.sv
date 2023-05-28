@@ -113,19 +113,23 @@ interface i2c_if #(
 	Description: Sends the provided words_to_write to the I2C bus, following the
 	I2C protocol. It breaks if a NACK is received, assuming the transfer is complete
 	TODO: Vishal had initially commented out the transfer_complete stuff!
+
+    Parameters:
+    transfer_complete: output, occurs when we no longer get an ack from the DUT after writing a word to the bus.
 	   ---------------------------------------------------------------------------- */
 	task write_words_to_I2C_bus( input bit [I2C_DATA_WIDTH-1:0] words_to_write [], output bit transfer_complete);
-		automatic int size_of_read_data;
+		automatic int size_of_write_data;
 		automatic bit ack_m;
 
-		size_of_read_data = words_to_write.size();
-		//$display("sizeof_read_data=%0d \n",size_of_read_data);
+		size_of_write_data = words_to_write.size();
+		//$display("sizeof_read_data=%0d \n",size_of_write_data);
 		
 		//$display ("debug1: entered the write_words_to_I2C_bus with words_to_write = %0x", words_to_write);
-		for(int i = 0; i < size_of_read_data ; i++ ) begin
+		for(int i = 0; i < size_of_write_data ; i++ ) begin
             write_word_to_I2C_bus(words_to_write[i]);
             wait4ack(ack_m);
             //$display("ack=%0b or nack received \n",ack_m);
+            // If there is no ack, then wait for either a start or a stop condition
             if(!ack_m) begin
                 fork
                     begin start(); end
@@ -135,6 +139,7 @@ interface i2c_if #(
                 break;
             end
 		end
+        // If we no longer get an ack from the DUT after writing a word to the bus.
 		transfer_complete = !ack_m;
 	endtask
 	
